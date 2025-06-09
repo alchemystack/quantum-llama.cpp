@@ -18193,6 +18193,28 @@ struct llama_context * llama_new_context_with_model(
     ctx->abort_callback_data = params.abort_callback_data;
 
     ctx->sampling.rng = std::mt19937(params.seed);
+
+    ctx->sampling.psirngclient_ptr = nullptr;
+
+    const char* psirng_host      = std::getenv("PSIRNG_HOST");
+    const char* psirng_grpc_port = std::getenv("PSIRNG_GRPC_PORT");
+    const char* psirng_cert_path = std::getenv("PSIRNG_CERT_PATH");
+
+    if (psirng_host != nullptr && psirng_grpc_port != nullptr && psirng_cert_path != nullptr) {
+        psirngclient_init(&ctx->sampling.psirngclient_ptr, psirng_host, std::stoi(psirng_grpc_port), psirng_cert_path);
+        if (!psirngclient_ishealthy(ctx->sampling.psirngclient_ptr)) {
+            LLAMA_LOG_ERROR("%s: psirng is not healthy\n", __func__);
+            llama_free(ctx);
+            return nullptr;
+        } else {
+            LLAMA_LOG_INFO("%s: Using psirng running on %s:%s\n", __func__, psirng_host, psirng_grpc_port);
+        }
+    } else {
+        LLAMA_LOG_ERROR("%s: psirng is not configured\n", __func__);
+        llama_free(ctx);
+        return nullptr;
+    }
+
     ctx->logits_all   = params.logits_all;
     // build worst-case graph for encoder if a model contains encoder
     ctx->is_encoding  = llama_model_has_encoder(model);

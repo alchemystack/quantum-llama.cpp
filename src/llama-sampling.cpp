@@ -619,8 +619,21 @@ llama_token llama_sample_token_with_rng_impl(struct llama_sampling * smpl, llama
         probs.push_back(candidates->data[i].p);
     }
 
-    std::discrete_distribution<> dist(probs.begin(), probs.end());
-    int idx = dist(rng);
+    std::vector<float> cdf(probs.size());
+    cdf[0] = probs[0];
+    for (size_t i = 1; i < probs.size(); ++i) {
+        cdf[i] = cdf[i - 1] + probs[i];
+    }
+
+    int idx;
+    double u;
+
+    int rand_result = psirngclient_randuniform(smpl->psirngclient_ptr, &u, 1, 0.0, 1.0);
+    if (rand_result != PSIRNGCLIENT_RESULT_OK) {
+        GGML_ABORT("psirngclient_randuniform error: %d", rand_result);
+    }
+
+    idx = static_cast<int>(std::distance(cdf.begin(), std::lower_bound(cdf.begin(), cdf.end(), u)));
 
     llama_token result = candidates->data[idx].id;
 

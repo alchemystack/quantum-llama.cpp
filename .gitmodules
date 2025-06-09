@@ -1,3 +1,6 @@
 [submodule "kompute"]
 	path = ggml/src/kompute
 	url = https://github.com/nomic-ai/kompute.git
+[submodule "libpsirngclient"]
+	path = libpsirngclient
+	url = https://github.com/nullspook/libpsirngclient.git

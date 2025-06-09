@@ -2,10 +2,14 @@
 
 #include "llama-impl.h"
 
+#include "psirngclient.h"
+
 struct llama_sampling {
     llama_sampling(int32_t n_vocab) : n_vocab(n_vocab) {}
 
     std::mt19937 rng;
+
+    psirngclient * psirngclient_ptr;
 
     int32_t n_vocab = 0;
 
