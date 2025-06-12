@@ -18201,7 +18201,11 @@ struct llama_context * llama_new_context_with_model(
     const char* psirng_cert_path = std::getenv("PSIRNG_CERT_PATH");
 
     if (psirng_host != nullptr && psirng_grpc_port != nullptr && psirng_cert_path != nullptr) {
-        psirngclient_init(&ctx->sampling.psirngclient_ptr, psirng_host, std::stoi(psirng_grpc_port), psirng_cert_path);
+        if (int result = psirngclient_init(&ctx->sampling.psirngclient_ptr, psirng_host, std::stoi(psirng_grpc_port), psirng_cert_path); result != PSIRNGCLIENT_RESULT_OK) {
+            LLAMA_LOG_ERROR("%s: failed to initialize psirng client: %d\n", __func__, result);
+            llama_free(ctx);
+            return nullptr;
+        }
         if (!psirngclient_ishealthy(ctx->sampling.psirngclient_ptr)) {
             LLAMA_LOG_ERROR("%s: psirng is not healthy\n", __func__);
             llama_free(ctx);
