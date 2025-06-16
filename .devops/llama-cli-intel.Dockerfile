@@ -4,7 +4,9 @@ FROM intel/oneapi-basekit:$ONEAPI_VERSION AS build
 
 ARG GGML_SYCL_F16=OFF
 RUN apt-get update && \
-    apt-get install -y git
+    apt-get install -y git && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 WORKDIR /app
 
@@ -19,10 +21,6 @@ RUN if [ "${GGML_SYCL_F16}" = "ON" ]; then \
     ${OPT_SYCL_F16} -DBUILD_SHARED_LIBS=OFF && \
     cmake --build build --config Release --target llama-cli
 
-FROM intel/oneapi-basekit:$ONEAPI_VERSION AS runtime
-
-COPY --from=build /app/build/bin/llama-cli /llama-cli
-
 ENV LC_ALL=C.utf8
 
-ENTRYPOINT [ "/llama-cli" ]
+ENTRYPOINT [ "/app/build/bin/llama-cli" ]

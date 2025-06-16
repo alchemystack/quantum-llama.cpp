@@ -9,7 +9,9 @@ RUN apt update && apt install -y git build-essential cmake wget libgomp1
 RUN wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | apt-key add - && \
     wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list && \
     apt update -y && \
-    apt-get install -y vulkan-sdk
+    apt-get install -y vulkan-sdk && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Build it
 WORKDIR /app
@@ -24,4 +26,4 @@ RUN cp /app/build/bin/llama-cli /llama-cli && \
 
 ENV LC_ALL=C.utf8
 
-ENTRYPOINT [ "/llama-cli" ]
+ENTRYPOINT [ "/app/build/bin/llama-cli" ]

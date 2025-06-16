@@ -9,12 +9,14 @@ RUN apt update && apt install -y git build-essential cmake wget
 RUN wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | apt-key add - && \
     wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list && \
     apt update -y && \
-    apt-get install -y vulkan-sdk libcurl4-openssl-dev curl
+    apt-get install -y vulkan-sdk curl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Build it
 WORKDIR /app
 COPY . .
-RUN cmake -B build -DGGML_VULKAN=1 -DLLAMA_CURL=1 && \
+RUN cmake -B build -DGGML_VULKAN=1 && \
     cmake --build build --config Release --target llama-server
 
 # Clean up
@@ -28,4 +30,4 @@ ENV LLAMA_ARG_HOST=0.0.0.0
 
 HEALTHCHECK CMD [ "curl", "-f", "http://localhost:8080/health" ]
 
-ENTRYPOINT [ "/llama-server" ]
+ENTRYPOINT [ "/app/build/bin/llama-server" ]

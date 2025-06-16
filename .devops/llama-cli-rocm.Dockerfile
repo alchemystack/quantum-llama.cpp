@@ -40,6 +40,10 @@ ENV GGML_HIPBLAS=1
 ENV CC=/opt/rocm/llvm/bin/clang
 ENV CXX=/opt/rocm/llvm/bin/clang++
 
-RUN make -j$(nproc) llama-cli
+RUN apt-get update && \
+    apt-get install -y cmake
 
-ENTRYPOINT [ "/app/llama-cli" ]
+RUN cmake -B build && \
+    cmake --build build --config Release --target llama-server -j$(nproc)
+
+ENTRYPOINT [ "/app/build/bin/llama-cli" ]

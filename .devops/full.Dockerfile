@@ -3,7 +3,9 @@ ARG UBUNTU_VERSION=22.04
 FROM ubuntu:$UBUNTU_VERSION AS build
 
 RUN apt-get update && \
-    apt-get install -y build-essential python3 python3-pip git libcurl4-openssl-dev libgomp1
+    apt-get install -y build-essential python3 python3-pip git cmake libgomp1 && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 COPY requirements.txt   requirements.txt
 COPY requirements       requirements
@@ -15,10 +17,9 @@ WORKDIR /app
 
 COPY . .
 
-ENV LLAMA_CURL=1
-
-
-RUN make -j$(nproc)
+RUN cmake -B build && \
+    cmake --build build --config Release -j$(nproc) && \
+    cp build/bin/* .
 
 ENV LC_ALL=C.utf8
 

@@ -40,11 +40,13 @@ ENV GGML_HIPBLAS=1
 ENV CC=/opt/rocm/llvm/bin/clang
 ENV CXX=/opt/rocm/llvm/bin/clang++
 
-# Enable cURL
-ENV LLAMA_CURL=1
 RUN apt-get update && \
-    apt-get install -y libcurl4-openssl-dev
+    apt-get install -y cmake && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-RUN make -j$(nproc)
+RUN cmake -B build && \
+    cmake --build build --config Release -j$(nproc) && \
+    cp build/bin/* .
 
 ENTRYPOINT ["/app/.devops/tools.sh"]
