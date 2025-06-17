@@ -10,9 +10,11 @@ To use quantum-llama.cpp, you need to have a running [psirng](https://github.com
 server. Set `PSIRNG_HOST`, `PSIRNG_GRPC_PORT`, and `PSIRNG_CERT_PATH`
 environment variables before running `llama-*` programs.
 
-**Example:**
-
 ```bash
+# Clone
+git clone --recurse-submodules https://github.com/nullspook/quantum-llama.cpp.git
+cd quantum-llama.cpp
+
 # Build
 cmake -B build
 cmake --build build --config Release
