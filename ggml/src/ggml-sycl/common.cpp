@@ -12,6 +12,9 @@
 
 #include "common.hpp"
 
+#include "ggml-backend-impl.h"
+#include "ggml-impl.h"
+
 int get_current_device_id() {
   return dpct::dev_mgr::instance().current_device_id();
 }
@@ -28,11 +31,7 @@ void* ggml_sycl_host_malloc(size_t size) try {
 
   if (err != 0) {
     // clear the error
-    fprintf(
-        stderr,
-        "WARNING: failed to allocate %.2f MB of pinned memory: %s\n",
-        size / 1024.0 / 1024.0,
-        "syclGetErrorString is not supported");
+    GGML_LOG_ERROR("WARNING: failed to allocate %.2f MB of pinned memory: %s\n", size / 1024.0 / 1024.0,    "syclGetErrorString is not supported");
     return nullptr;
   }
 
@@ -52,6 +51,10 @@ void ggml_sycl_host_free(void* ptr) try {
   std::exit(1);
 }
 
+bool gpu_has_xmx(sycl::device &dev) {
+    return dev.has(sycl::aspect::ext_intel_matrix);
+}
+
 int64_t downsample_sycl_global_range(int64_t accumulate_block_num, int64_t block_size) {
   const int64_t max_range = std::numeric_limits<int>::max();
   int64_t sycl_down_blk_size = block_size;
@@ -61,4 +64,20 @@ int64_t downsample_sycl_global_range(int64_t accumulate_block_num, int64_t block
       global_range = accumulate_block_num * sycl_down_blk_size;
   }
   return sycl_down_blk_size;
+}
+
+void release_extra_gpu(ggml_tensor_extra_gpu * extra, std::vector<queue_ptr> streams) {
+    for (int i = 0; i < ggml_sycl_info().device_count; ++i) {
+        for (int64_t is = 0; is < GGML_SYCL_MAX_STREAMS; ++is) {
+            if (extra->events[i][is] != nullptr) {
+                SYCL_CHECK(CHECK_TRY_ERROR(dpct::destroy_event(extra->events[i][is])));
+            }
+        }
+        if (extra->data_device[i] != nullptr && streams.size()>0) {
+            ggml_sycl_set_device(i);
+            SYCL_CHECK(
+                CHECK_TRY_ERROR(sycl::free(extra->data_device[i], *(streams[i]))));
+        }
+    }
+    delete extra;
 }

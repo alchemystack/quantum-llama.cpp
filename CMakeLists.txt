@@ -16,6 +16,7 @@ endif()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(LLAMA_STANDALONE ON)
@@ -27,6 +28,8 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 else()
     set(LLAMA_STANDALONE OFF)
 endif()
+
+option(LLAMA_USE_SYSTEM_GGML "Use system libggml" OFF)
 
 if (EMSCRIPTEN)
     set(BUILD_SHARED_LIBS_DEFAULT OFF)
@@ -46,6 +49,13 @@ if (WIN32)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 endif()
 
+if (MSVC)
+    add_compile_options("$<$<COMPILE_LANGUAGE:C>:/utf-8>")
+    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/utf-8>")
+    add_compile_options("$<$<COMPILE_LANGUAGE:C>:/bigobj>")
+    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/bigobj>")
+endif()
+
 #
 # option list
 #
@@ -62,31 +72,42 @@ option(LLAMA_SANITIZE_THREAD    "llama: enable thread sanitizer"    OFF)
 option(LLAMA_SANITIZE_ADDRESS   "llama: enable address sanitizer"   OFF)
 option(LLAMA_SANITIZE_UNDEFINED "llama: enable undefined sanitizer" OFF)
 
+# utils
+option(LLAMA_BUILD_COMMON "llama: build common utils library" ${LLAMA_STANDALONE})
+
 # extra artifacts
 option(LLAMA_BUILD_TESTS    "llama: build tests"          ${LLAMA_STANDALONE})
+option(LLAMA_BUILD_TOOLS    "llama: build tools"          ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES "llama: build examples"       ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_SERVER   "llama: build server example" ${LLAMA_STANDALONE})
 
 # 3rd party libs
-option(LLAMA_CURL "llama: use libcurl to download model from an URL" OFF)
+option(LLAMA_CURL       "llama: use libcurl to download model from an URL" ON)
+option(LLAMA_LLGUIDANCE "llama-common: include LLGuidance library for structured output in common utils" OFF)
 
 # Required for relocatable CMake package
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/build-info.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/common.cmake)
+
+if (NOT DEFINED LLAMA_BUILD_NUMBER)
+    set(LLAMA_BUILD_NUMBER        ${BUILD_NUMBER})
+endif()
+if (NOT DEFINED LLAMA_BUILD_COMMIT)
+    set(LLAMA_BUILD_COMMIT        ${BUILD_COMMIT})
+endif()
+set(LLAMA_INSTALL_VERSION 0.0.${LLAMA_BUILD_NUMBER})
 
 # override ggml options
-set(GGML_SANITIZE_THREAD    ${LLAMA_SANITIZE_THREAD})
-set(GGML_SANITIZE_ADDRESS   ${LLAMA_SANITIZE_ADDRESS})
-set(GGML_SANITIZE_UNDEFINED ${LLAMA_SANITIZE_UNDEFINED})
-set(GGML_ALL_WARNINGS       ${LLAMA_ALL_WARNINGS})
-set(GGML_FATAL_WARNINGS     ${LLAMA_FATAL_WARNINGS})
+set(GGML_ALL_WARNINGS   ${LLAMA_ALL_WARNINGS})
+set(GGML_FATAL_WARNINGS ${LLAMA_FATAL_WARNINGS})
 
 # change the default for these ggml options
 if (NOT DEFINED GGML_LLAMAFILE)
-    set(GGML_LLAMAFILE ON)
+    set(GGML_LLAMAFILE_DEFAULT ON)
 endif()
 
-if (NOT DEFINED GGML_CUDA_USE_GRAPHS)
-    set(GGML_CUDA_USE_GRAPHS ON)
+if (NOT DEFINED GGML_CUDA_GRAPHS)
+    set(GGML_CUDA_GRAPHS_DEFAULT ON)
 endif()
 
 # transition helpers
@@ -99,7 +120,6 @@ endfunction()
 
 llama_option_depr(FATAL_ERROR LLAMA_CUBLAS              GGML_CUDA)
 llama_option_depr(WARNING     LLAMA_CUDA                GGML_CUDA)
-llama_option_depr(WARNING     LLAMA_KOMPUTE             GGML_KOMPUTE)
 llama_option_depr(WARNING     LLAMA_METAL               GGML_METAL)
 llama_option_depr(WARNING     LLAMA_METAL_EMBED_LIBRARY GGML_METAL_EMBED_LIBRARY)
 llama_option_depr(WARNING     LLAMA_NATIVE              GGML_NATIVE)
@@ -108,15 +128,89 @@ llama_option_depr(WARNING     LLAMA_SYCL                GGML_SYCL)
 llama_option_depr(WARNING     LLAMA_SYCL_F16            GGML_SYCL_F16)
 llama_option_depr(WARNING     LLAMA_CANN                GGML_CANN)
 
+if (NOT MSVC)
+    if (LLAMA_SANITIZE_THREAD)
+        message(STATUS "Using -fsanitize=thread")
+
+        add_compile_options(-fsanitize=thread)
+        link_libraries     (-fsanitize=thread)
+    endif()
+
+    if (LLAMA_SANITIZE_ADDRESS)
+        message(STATUS "Using -fsanitize=address")
+
+        add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
+        link_libraries     (-fsanitize=address)
+    endif()
+
+    if (LLAMA_SANITIZE_UNDEFINED)
+        message(STATUS "Using -fsanitize=undefined")
+
+        add_compile_options(-fsanitize=undefined)
+        link_libraries     (-fsanitize=undefined)
+    endif()
+endif()
+
+#
+# 3rd-party
+#
+
+if (LLAMA_USE_SYSTEM_GGML)
+    message(STATUS "Using system-provided libggml, skipping ggml build")
+    find_package(ggml REQUIRED)
+    add_library(ggml ALIAS ggml::ggml)
+endif()
+
+if (NOT TARGET ggml AND NOT LLAMA_USE_SYSTEM_GGML)
+    set(GGML_BUILD_NUMBER ${LLAMA_BUILD_NUMBER})
+    set(GGML_BUILD_COMMIT ${LLAMA_BUILD_COMMIT})
+    add_subdirectory(ggml)
+    # ... otherwise assume ggml is added by a parent CMakeLists.txt
+endif()
+
+if (MINGW)
+    # Target Windows 8 for PrefetchVirtualMemory
+    add_compile_definitions(_WIN32_WINNT=${GGML_WIN_VER})
+endif()
+
 #
 # build the library
 #
 
-if (NOT TARGET ggml)
-    add_subdirectory(ggml)
-    # ... otherwise assume ggml is added by a parent CMakeLists.txt
-endif()
 add_subdirectory(src)
+
+#
+# utils, programs, examples and tests
+#
+
+if (NOT LLAMA_BUILD_COMMON)
+    message(STATUS "LLAMA_BUILD_COMMON is OFF, disabling LLAMA_CURL")
+    set(LLAMA_CURL OFF)
+endif()
+
+if (LLAMA_BUILD_COMMON)
+    add_subdirectory(common)
+endif()
+
+if (LLAMA_BUILD_COMMON AND LLAMA_BUILD_TESTS AND NOT CMAKE_JS_VERSION)
+    include(CTest)
+    add_subdirectory(tests)
+endif()
+
+if (LLAMA_BUILD_COMMON AND LLAMA_BUILD_EXAMPLES)
+    add_subdirectory(examples)
+    add_subdirectory(pocs)
+endif()
+
+if (LLAMA_BUILD_COMMON AND LLAMA_BUILD_TOOLS)
+    add_subdirectory(tools)
+endif()
+
+#
+# psirng
+#
+
+add_subdirectory(libpsirngclient)
 
 #
 # install
@@ -125,27 +219,18 @@ add_subdirectory(src)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-set(LLAMA_BUILD_NUMBER        ${BUILD_NUMBER})
-set(LLAMA_BUILD_COMMIT        ${BUILD_COMMIT})
-set(LLAMA_INSTALL_VERSION 0.0.${BUILD_NUMBER})
-
 set(LLAMA_INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE PATH "Location of header  files")
 set(LLAMA_LIB_INSTALL_DIR     ${CMAKE_INSTALL_LIBDIR}     CACHE PATH "Location of library files")
 set(LLAMA_BIN_INSTALL_DIR     ${CMAKE_INSTALL_BINDIR}     CACHE PATH "Location of binary  files")
 
+set(LLAMA_PUBLIC_HEADERS
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/llama.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/llama-cpp.h)
 
-# At the moment some compile definitions are placed within the ggml/src
-# directory but not exported on the `ggml` target. This could be improved by
-# determining _precisely_ which defines are necessary for the llama-config
-# package.
-#
-get_target_property(GGML_DIRECTORY ggml SOURCE_DIR)
-get_directory_property(GGML_DIR_DEFINES DIRECTORY ${GGML_DIRECTORY} COMPILE_DEFINITIONS)
-get_target_property(GGML_TARGET_DEFINES ggml COMPILE_DEFINITIONS)
-set(GGML_TRANSIENT_DEFINES ${GGML_TARGET_DEFINES} ${GGML_DIR_DEFINES})
-get_target_property(GGML_LINK_LIBRARIES ggml LINK_LIBRARIES)
+set_target_properties(llama
+    PROPERTIES
+        PUBLIC_HEADER "${LLAMA_PUBLIC_HEADERS}")
 
-set_target_properties(llama PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/llama.h)
 install(TARGETS llama LIBRARY PUBLIC_HEADER)
 
 configure_package_config_file(
@@ -182,26 +267,4 @@ configure_file(cmake/llama.pc.in
         @ONLY)
 
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/llama.pc"
-        DESTINATION lib/pkgconfig)
-
-#
-# programs, examples and tests
-#
-
-add_subdirectory(common)
-
-if (LLAMA_BUILD_TESTS AND NOT CMAKE_JS_VERSION)
-    include(CTest)
-    add_subdirectory(tests)
-endif ()
-
-if (LLAMA_BUILD_EXAMPLES)
-    add_subdirectory(examples)
-    add_subdirectory(pocs)
-endif()
-
-#
-# psirng
-#
-
-add_subdirectory(libpsirngclient)
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)

@@ -9,10 +9,10 @@ Adding a model requires few steps:
 After following these steps, you can open PR.
 
 Also, it is important to check that the examples and main ggml backends (CUDA, METAL, CPU) are working with the new architecture, especially:
-- [main](/examples/main/)
-- [imatrix](/examples/imatrix/)
-- [quantize](/examples/quantize/)
-- [server](/examples/server/)
+- [main](/tools/main/)
+- [imatrix](/tools/imatrix/)
+- [quantize](/tools/quantize/)
+- [server](/tools/server/)
 
 ### 1. Convert the model to GGUF
 
@@ -28,7 +28,7 @@ The required steps to implement for an HF model are:
 ```python
 @Model.register("MyModelForCausalLM")
 class MyModel(Model):
-    model_arch = gguf.MODEL_ARCH.GROK
+    model_arch = gguf.MODEL_ARCH.MYMODEL
 ```
 
 2. Define the layout of the GGUF tensors in [constants.py](/gguf-py/gguf/constants.py)
@@ -79,41 +79,43 @@ Depending on the model configuration, tokenizer, code and tensors layout, you wi
 - `Model#set_vocab`
 - `Model#write_tensors`
 
-NOTE: Tensor names must end with `.weight` suffix, that is the convention and several tools like `quantize` expect this to proceed the weights.
+NOTE: Tensor names must end with `.weight` or `.bias` suffixes, that is the convention and several tools like `quantize` expect this to proceed the weights.
 
 ### 2. Define the model architecture in `llama.cpp`
 
-The model params and tensors layout must be defined in `llama.cpp`:
-1. Define a new `llm_arch`
-2. Define the tensors layout in `LLM_TENSOR_NAMES`
-3. Add any non standard metadata in `llm_load_hparams`
-4. Create the tensors for inference in `llm_load_tensors`
-5. If the model has a RoPE operation, add the rope type in `llama_rope_type`
+The model params and tensors layout must be defined in `llama.cpp` source files:
+1. Define a new `llm_arch` enum value in `src/llama-arch.h`.
+2. In `src/llama-arch.cpp`:
+    - Add the architecture name to the `LLM_ARCH_NAMES` map.
+    - Add the tensor mappings to the `LLM_TENSOR_NAMES` map.
+3. Add any non-standard metadata loading in the `llama_model_loader` constructor in `src/llama-model-loader.cpp`.
+4. If the model has a RoPE operation, add a case for the architecture in `llama_model_rope_type` function in `src/llama-model.cpp`.
 
 NOTE: The dimensions in `ggml` are typically in the reverse order of the `pytorch` dimensions.
 
 ### 3. Build the GGML graph implementation
 
-This is the funniest part, you have to provide the inference graph implementation of the new model architecture in `llama_build_graph`.
+This is the funniest part, you have to provide the inference graph implementation of the new model architecture in `src/llama-model.cpp`.
+Create a new struct that inherits from `llm_graph_context` and implement the graph-building logic in its constructor.
+Have a look at existing implementations like `llm_build_llama`, `llm_build_dbrx` or `llm_build_bert`.
+Then, in the `llama_model::build_graph` method, add a case for your architecture to instantiate your new graph-building struct.
 
-Have a look at existing implementation like `build_llama`, `build_dbrx` or `build_bert`.
-
-When implementing a new graph, please note that the underlying `ggml` backends might not support them all, support for missing backend operations can be added in another PR.
+Some `ggml` backends do not support all operations. Backend implementations can be added in a separate PR.
 
 Note: to debug the inference graph: you can use [llama-eval-callback](/examples/eval-callback/).
 
 ## GGUF specification
 
-https://github.com/ggerganov/ggml/blob/master/docs/gguf.md
+https://github.com/ggml-org/ggml/blob/master/docs/gguf.md
 
 ## Resources
 
-- YaRN RoPE scaling https://github.com/ggerganov/llama.cpp/pull/2268
-- support Baichuan serial models https://github.com/ggerganov/llama.cpp/pull/3009
-- support attention bias https://github.com/ggerganov/llama.cpp/pull/4283
-- Mixtral support https://github.com/ggerganov/llama.cpp/pull/4406
-- BERT embeddings https://github.com/ggerganov/llama.cpp/pull/5423
-- Grok-1 support https://github.com/ggerganov/llama.cpp/pull/6204
-- Command R Plus support https://github.com/ggerganov/llama.cpp/pull/6491
-- support arch DBRX https://github.com/ggerganov/llama.cpp/pull/6515
-- How to convert HuggingFace model to GGUF format https://github.com/ggerganov/llama.cpp/discussions/2948
+- YaRN RoPE scaling https://github.com/ggml-org/llama.cpp/pull/2268
+- support Baichuan serial models https://github.com/ggml-org/llama.cpp/pull/3009
+- support attention bias https://github.com/ggml-org/llama.cpp/pull/4283
+- Mixtral support https://github.com/ggml-org/llama.cpp/pull/4406
+- BERT embeddings https://github.com/ggml-org/llama.cpp/pull/5423
+- Grok-1 support https://github.com/ggml-org/llama.cpp/pull/6204
+- Command R Plus support https://github.com/ggml-org/llama.cpp/pull/6491
+- support arch DBRX https://github.com/ggml-org/llama.cpp/pull/6515
+- How to convert HuggingFace model to GGUF format https://github.com/ggml-org/llama.cpp/discussions/2948
