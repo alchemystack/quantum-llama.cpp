@@ -27,7 +27,7 @@ psirngclient_manager::psirngclient_manager() {
         }
 
         if (!psirngclient_ishealthy(psirngclient_ptr)) {
-            throw std::runtime_error("psirng client is not healthy");
+            throw std::runtime_error("psirng is not healthy");
         }
     } else {
         throw std::runtime_error("psirng is not configured");
