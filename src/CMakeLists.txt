@@ -37,13 +37,32 @@ add_library(llama
             unicode.h
             psirngclient-manager.cpp
             psirngclient-manager.h
+            anu-qrng-client.cpp
+            anu-qrng-client.h
             )
 
 target_include_directories(llama PRIVATE .)
 target_include_directories(llama PUBLIC ../include ../libpsirngclient/src)
 target_compile_features   (llama PRIVATE cxx_std_17) # don't bump
 
-target_link_libraries(llama PUBLIC ggml psirngclient)
+if (MSVC)
+    target_link_libraries(llama PUBLIC ggml psirngclient_static)
+else()
+    target_link_libraries(llama PUBLIC ggml psirngclient)
+endif()
+
+# ANU QRNG HTTP client dependencies
+if (WIN32)
+    # Windows uses WinHTTP (linked via pragma comment in anu-qrng-client.cpp)
+else()
+    # Linux/Mac use libcurl
+    find_package(CURL)
+    if (CURL_FOUND)
+        target_link_libraries(llama PRIVATE CURL::libcurl)
+    else()
+        message(WARNING "libcurl not found. ANU QRNG client will not be available on this platform. Install libcurl-dev (Debian/Ubuntu) or libcurl-devel (RedHat/Fedora).")
+    endif()
+endif()
 
 if (BUILD_SHARED_LIBS)
     set_target_properties(llama PROPERTIES POSITION_INDEPENDENT_CODE ON)

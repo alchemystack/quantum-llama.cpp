@@ -214,9 +214,11 @@ static void llama_token_data_array_partial_sort_inplace(llama_token_data_array *
 
 static int llama_sample_dist(llama_token_data_array * cur_p, std::mt19937 & rng) {
     double chance;
-    int rand_result = psirngclient_randuniform(psirngclient_manager::get_psirngclient(), &chance, 1, 0.0, 1.0);
-    if (rand_result != PSIRNGCLIENT_RESULT_OK) {
-        GGML_ABORT("%s: psirngclient_randuniform error: %d", __func__, rand_result);
+
+    // Get quantum random value (fresh API call each time)
+    int rand_result = psirngclient_manager::get_random_value(&chance);
+    if (rand_result != 0) {
+        GGML_ABORT("%s: quantum random error: %d", __func__, rand_result);
     }
 
     double cumulative = 0.0;
@@ -575,6 +577,33 @@ struct llama_sampler * llama_sampler_init_greedy() {
     );
 }
 
+//
+// Quantum consciousness-aware sampling helpers
+//
+
+// Calculate Shannon entropy and normalized entropy from probabilities
+// Used for adaptive entropy-based sampling (guideline requirement)
+static float calculate_normalized_entropy(const llama_token_data_array * cur_p) {
+    if (cur_p->size <= 1) {
+        return 0.0f;
+    }
+
+    float max_entropy = -logf(1.0f / static_cast<float>(cur_p->size));
+    if (max_entropy <= 0.0f) {
+        return 0.0f;
+    }
+
+    float entropy = 0.0f;
+    for (size_t i = 0; i < cur_p->size; ++i) {
+        float prob = cur_p->data[i].p;
+        if (prob > 0.0f) {
+            entropy -= prob * logf(prob);
+        }
+    }
+
+    return entropy / max_entropy;
+}
+
 // dist
 
 struct llama_sampler_dist {
@@ -582,6 +611,23 @@ struct llama_sampler_dist {
           uint32_t seed_cur;
 
     std::mt19937 rng;
+
+    // Quantum sampling parameters
+    bool    adaptive_sampling;     // Enable entropy-based adaptive sampling
+    float   entropy_threshold;     // Below this: greedy, above: QRNG
+    bool    verbose;
+    bool    print_statistics;
+
+    // EDT (Entropy-based Dynamic Temperature) parameters
+    bool    edt_enabled;
+    float   edt_t0;      // Upper bound temperature
+    float   edt_theta;   // Entropy sensitivity
+    float   edt_base;    // Base N (typically 0.8)
+
+    // Statistics
+    size_t total_samples;
+    size_t greedy_samples;
+    size_t quantum_samples;
 };
 
 static const char * llama_sampler_dist_name(const struct llama_sampler * /*smpl*/) {
@@ -591,7 +637,9 @@ static const char * llama_sampler_dist_name(const struct llama_sampler * /*smpl*
 static void llama_sampler_dist_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
     auto * ctx = (llama_sampler_dist *) smpl->ctx;
 
-    // edge cases
+    ctx->total_samples++;
+
+    // Edge cases
     if (cur_p->size == 0) {
         cur_p->selected = -1;
         return;
@@ -601,10 +649,11 @@ static void llama_sampler_dist_apply(struct llama_sampler * smpl, llama_token_da
 
     if (cur_p->size == 1) {
         cur_p->data[0].p = 1.0f;
+        ctx->greedy_samples++;
         return;
     }
 
-    // max logit for numerical stability
+    // Max logit for numerical stability
     float max_l = cur_p->data[0].logit;
     if (!cur_p->sorted) {
         for (size_t i = 1; i < cur_p->size; ++i) {
@@ -612,54 +661,101 @@ static void llama_sampler_dist_apply(struct llama_sampler * smpl, llama_token_da
         }
     }
 
-    // apply softmax to obtain the probabilities
-    double sum_cum = 0.0f;
+    // Apply softmax to obtain the probabilities
+    double sum_cum = 0.0;
     for (size_t i = 0; i < cur_p->size; ++i) {
         float p = expf(cur_p->data[i].logit - max_l);
         cur_p->data[i].p = p;
         sum_cum += p;
     }
 
-#if 1
-    // sample from the obtained probabilities and normalize the probs in a single pass
-    // this is ~3x faster on Mac with full gpt-oss vocab than the version below
-    //
-    double rnd;
-    int rand_result = psirngclient_randuniform(psirngclient_manager::get_psirngclient(), &rnd, 1, 0.0, 1.0);
-    if (rand_result != PSIRNGCLIENT_RESULT_OK) {
-        GGML_ABORT("%s: psirngclient_randuniform error: %d", __func__, rand_result);
-    }
-          double sum_run = 0.0f;
-    const double sum_tgt = sum_cum*rnd;
-
-    bool found = false;
+    // Normalize probabilities
     for (size_t i = 0; i < cur_p->size; ++i) {
-        if (!found) {
-            // accumulate probs until we reach the target sum
-            sum_run += cur_p->data[i].p;
-            if (sum_run >= sum_tgt) {
-                cur_p->selected = i;
-                found = true;
-            }
+        cur_p->data[i].p = static_cast<float>(cur_p->data[i].p / sum_cum);
+    }
+
+    // Calculate entropy for adaptive sampling
+    float normalized_entropy = 0.0f;
+    if (ctx->adaptive_sampling) {
+        normalized_entropy = calculate_normalized_entropy(cur_p);
+
+        if (ctx->verbose) {
+            LLAMA_LOG_INFO("%s: entropy=%.4f, threshold=%.4f\n",
+                          __func__, normalized_entropy, ctx->entropy_threshold);
+        }
+    }
+
+    // ============ LOW ENTROPY: GREEDY SAMPLING ============
+    if (ctx->adaptive_sampling && normalized_entropy < ctx->entropy_threshold) {
+        ctx->greedy_samples++;
+        if (ctx->verbose) {
+            LLAMA_LOG_INFO("%s: LOW ENTROPY (%.4f < %.4f) -> greedy\n",
+                          __func__, normalized_entropy, ctx->entropy_threshold);
+        }
+        llama_sampler_greedy_apply(nullptr, cur_p);
+        return;
+    }
+
+    // ============ HIGH ENTROPY: EDT TEMPERATURE + QUANTUM SAMPLING ============
+    ctx->quantum_samples++;
+
+    // Calculate EDT temperature: T = T0 * N^(theta/entropy)
+    // Higher entropy -> higher temperature (more exploration)
+    // Lower entropy (but above threshold) -> lower temperature (more focused)
+    float edt_temp = 1.0f;  // default: no temperature scaling
+    if (ctx->edt_enabled && normalized_entropy > 0.0f) {
+        edt_temp = ctx->edt_t0 * powf(ctx->edt_base, ctx->edt_theta / normalized_entropy);
+        // Clamp to reasonable range [0.01, edt_t0]
+        edt_temp = std::max(0.01f, std::min(edt_temp, ctx->edt_t0));
+    }
+
+    if (ctx->verbose) {
+        LLAMA_LOG_INFO("%s: HIGH ENTROPY (%.4f >= %.4f) -> EDT temp=%.3f, QRNG\n",
+                      __func__, normalized_entropy, ctx->entropy_threshold, edt_temp);
+    }
+
+    // Apply EDT temperature to logits and recompute softmax
+    if (edt_temp > 0.0f && std::fabs(edt_temp - 1.0f) > 1e-6f) {
+        // Find max logit for numerical stability
+        float max_l_temp = cur_p->data[0].logit;
+        for (size_t i = 1; i < cur_p->size; ++i) {
+            max_l_temp = std::max(max_l_temp, cur_p->data[i].logit);
         }
 
-        // normalize probs
-        cur_p->data[i].p /= sum_cum;
+        // Apply temperature-scaled softmax
+        double sum_exp = 0.0;
+        for (size_t i = 0; i < cur_p->size; ++i) {
+            float scaled_logit = (cur_p->data[i].logit - max_l_temp) / edt_temp;
+            float p = expf(scaled_logit);
+            cur_p->data[i].p = p;
+            sum_exp += p;
+        }
+
+        // Normalize probabilities
+        for (size_t i = 0; i < cur_p->size; ++i) {
+            cur_p->data[i].p = static_cast<float>(cur_p->data[i].p / sum_exp);
+        }
     }
 
-    // fallback to the last token (don't think this can happen)
-    assert(found);
-    if (!found) {
-        cur_p->selected = cur_p->size - 1;
+    // Get quantum random value for sampling (fresh API call each time)
+    double rnd;
+    int rand_result = psirngclient_manager::get_random_value(&rnd);
+    if (rand_result != 0) {
+        GGML_ABORT("%s: quantum random value error: %d", __func__, rand_result);
     }
-#else
-    // for clarity, this is the same as above but does one pass for normalization and one extra pass for sampling
+
+    // Sample using quantum random value (inverse CDF)
+    double sum_run = 0.0;
     for (size_t i = 0; i < cur_p->size; ++i) {
-        cur_p->data[i].p /= sum_cum;
+        sum_run += cur_p->data[i].p;
+        if (sum_run >= rnd) {
+            cur_p->selected = i;
+            return;
+        }
     }
 
-    cur_p->selected = llama_sample_dist(cur_p, ctx->rng);
-#endif
+    // Fallback to last token
+    cur_p->selected = cur_p->size - 1;
 }
 
 static struct llama_sampler * llama_sampler_dist_clone(const struct llama_sampler * smpl) {
@@ -683,7 +779,8 @@ static void llama_sampler_dist_reset(struct llama_sampler * smpl) {
 }
 
 static void llama_sampler_dist_free(struct llama_sampler * smpl) {
-    delete (llama_sampler_dist *) smpl->ctx;
+    auto * ctx = (llama_sampler_dist *) smpl->ctx;
+    delete ctx;
 }
 
 static struct llama_sampler_i llama_sampler_dist_i = {
@@ -700,11 +797,96 @@ struct llama_sampler * llama_sampler_init_dist(uint32_t seed) {
     return llama_sampler_init(
         /* .iface = */ &llama_sampler_dist_i,
         /* .ctx   = */ new llama_sampler_dist {
-            /* .seed     = */ seed,
-            /* .seed_cur = */ seed_cur,
-            /* .rng      = */ std::mt19937(seed_cur),
+            /* .seed                    = */ seed,
+            /* .seed_cur                = */ seed_cur,
+            /* .rng                     = */ std::mt19937(seed_cur),
+            /* .adaptive_sampling       = */ false,  // Will be configured via llama_sampler_dist_set_quantum_params
+            /* .entropy_threshold       = */ 0.40f,
+            /* .verbose                 = */ false,
+            /* .print_statistics        = */ false,
+            /* .edt_enabled             = */ true,
+            /* .edt_t0                  = */ 2.0f,
+            /* .edt_theta               = */ 1.0f,
+            /* .edt_base                = */ 0.8f,
+            /* .total_samples           = */ 0,
+            /* .greedy_samples          = */ 0,
+            /* .quantum_samples         = */ 0,
         }
     );
+}
+
+// Configure quantum parameters for an existing dist sampler
+// This is called internally from common_sampler_init
+void llama_sampler_dist_set_quantum_params(
+        struct llama_sampler * smpl,
+        bool adaptive_sampling,
+        float entropy_threshold,
+        bool verbose,
+        bool print_statistics,
+        // EDT parameters
+        bool edt_enabled,
+        float edt_t0,
+        float edt_theta,
+        float edt_base) {
+
+    if (!smpl || strcmp(llama_sampler_name(smpl), "dist") != 0) {
+        return; // Not a dist sampler
+    }
+
+    auto * ctx = (llama_sampler_dist *) smpl->ctx;
+    ctx->adaptive_sampling = adaptive_sampling;
+    ctx->entropy_threshold = entropy_threshold;
+    ctx->verbose = verbose;
+    ctx->print_statistics = print_statistics;
+
+    // EDT parameters
+    ctx->edt_enabled = edt_enabled;
+    ctx->edt_t0 = edt_t0;
+    ctx->edt_theta = edt_theta;
+    ctx->edt_base = edt_base;
+
+    if (verbose) {
+        LLAMA_LOG_INFO("%s: Adaptive sampling=%s, entropy_threshold=%.2f, EDT=%s (T0=%.2f, theta=%.2f)\n",
+                      __func__,
+                      adaptive_sampling ? "ON" : "OFF",
+                      entropy_threshold,
+                      edt_enabled ? "ON" : "OFF",
+                      edt_t0, edt_theta);
+    }
+}
+
+// Print quantum sampling statistics
+void llama_sampler_dist_print_stats(struct llama_sampler * smpl) {
+    if (!smpl || strcmp(llama_sampler_name(smpl), "dist") != 0) {
+        return; // Not a dist sampler
+    }
+
+    const auto * ctx = (const llama_sampler_dist *) smpl->ctx;
+    if (ctx->total_samples == 0) {
+        return;
+    }
+
+    float greedy_pct = 100.0f * ctx->greedy_samples / ctx->total_samples;
+    float quantum_pct = 100.0f * ctx->quantum_samples / ctx->total_samples;
+
+    LLAMA_LOG_INFO("\n");
+    LLAMA_LOG_INFO("=== Quantum Sampling Statistics ===\n");
+    LLAMA_LOG_INFO("Total tokens sampled: %zu\n", ctx->total_samples);
+    LLAMA_LOG_INFO("Greedy (entropy < %.2f): %zu (%.1f%%) - no QRNG calls\n",
+                  ctx->entropy_threshold, ctx->greedy_samples, greedy_pct);
+    LLAMA_LOG_INFO("Quantum sampling: %zu (%.1f%%) - EDT temp applied\n",
+                  ctx->quantum_samples, quantum_pct);
+    LLAMA_LOG_INFO("QRNG calls saved: %.1f%% (greedy tokens bypassed API)\n", greedy_pct);
+    LLAMA_LOG_INFO("===================================\n");
+}
+
+// Check if statistics should be printed (based on print_statistics flag)
+bool llama_sampler_dist_should_print_stats(const struct llama_sampler * smpl) {
+    if (!smpl || strcmp(llama_sampler_name(smpl), "dist") != 0) {
+        return false;
+    }
+    const auto * ctx = (const llama_sampler_dist *) smpl->ctx;
+    return ctx->print_statistics;
 }
 
 // top-k
@@ -1220,9 +1402,11 @@ static void llama_sample_xtc_apply(struct llama_sampler * smpl, llama_token_data
     }
 
     double chance;
-    int rand_result = psirngclient_randuniform(psirngclient_manager::get_psirngclient(), &chance, 1, 0.0, 1.0);
-    if (rand_result != PSIRNGCLIENT_RESULT_OK) {
-        GGML_ABORT("%s: psirngclient_randuniform error: %d", __func__, rand_result);
+
+    // Get quantum random value (fresh API call each time)
+    int rand_result = psirngclient_manager::get_random_value(&chance);
+    if (rand_result != 0) {
+        GGML_ABORT("%s: quantum random error: %d", __func__, rand_result);
     }
     if (chance > ctx->probability) {
         return;

@@ -2,6 +2,7 @@
 
 #include "common.h"
 #include "log.h"
+#include "../src/llama-sampling.h"
 
 #include <cmath>
 #include <unordered_map>
@@ -273,7 +274,23 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                     GGML_ASSERT(false && "unknown sampler type");
             }
         }
-        llama_sampler_chain_add(result->chain, llama_sampler_init_dist(params.seed));
+        // Add dist sampler
+        struct llama_sampler * dist_sampler = llama_sampler_init_dist(params.seed);
+        llama_sampler_chain_add(result->chain, dist_sampler);
+
+        // Configure quantum parameters for the dist sampler
+        llama_sampler_dist_set_quantum_params(
+            dist_sampler,
+            params.quantum_adaptive_sampling,
+            params.quantum_entropy_threshold,
+            params.quantum_verbose,
+            params.quantum_statistics,
+            // EDT parameters
+            params.quantum_edt_enabled,
+            params.quantum_edt_t0,
+            params.quantum_edt_theta,
+            params.quantum_edt_base
+        );
     } else if (params.mirostat == 1) {
         llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
         llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat(llama_vocab_n_tokens(vocab), params.seed, params.mirostat_tau, params.mirostat_eta, 100));
@@ -289,6 +306,16 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
 
 void common_sampler_free(struct common_sampler * gsmpl) {
     if (gsmpl) {
+        // Print quantum statistics if enabled (find dist sampler in chain)
+        const int n = llama_sampler_chain_n(gsmpl->chain);
+        for (int i = 0; i < n; i++) {
+            struct llama_sampler * smpl = llama_sampler_chain_get(gsmpl->chain, i);
+            if (llama_sampler_dist_should_print_stats(smpl)) {
+                llama_sampler_dist_print_stats(smpl);
+                break;
+            }
+        }
+
         llama_sampler_free(gsmpl->grmr);
 
         llama_sampler_free(gsmpl->chain);

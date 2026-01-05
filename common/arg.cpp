@@ -2477,6 +2477,65 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             params.sampling.grammar = json_schema_to_grammar(json::parse(schema));
         }
     ).set_sparam());
+
+    add_opt(common_arg(
+        {"--quantum-verbose"},
+        "Enable verbose quantum sampling logging",
+        [](common_params & params) {
+            params.sampling.quantum_verbose = true;
+        }
+    ).set_sparam());
+
+    // Adaptive entropy-based sampling arguments
+    add_opt(common_arg(
+        {"--quantum-entropy-threshold"}, "N",
+        string_format("Entropy threshold below which greedy sampling is used (default: %.2f)", 0.40f),
+        [](common_params & params, const std::string & value) {
+            params.sampling.quantum_entropy_threshold = std::stof(value);
+        }
+    ).set_sparam());
+
+    add_opt(common_arg(
+        {"--no-quantum-adaptive-sampling"},
+        "Disable entropy-based greedy fallback (always use quantum sampling)",
+        [](common_params & params) {
+            params.sampling.quantum_adaptive_sampling = false;
+        }
+    ).set_sparam());
+
+    // EDT (Entropy-based Dynamic Temperature) arguments
+    add_opt(common_arg(
+        {"--quantum-edt-t0"}, "N",
+        string_format("EDT max temperature for high-entropy tokens (default: %.1f)", 2.0f),
+        [](common_params & params, const std::string & value) {
+            params.sampling.quantum_edt_t0 = std::stof(value);
+        }
+    ).set_sparam());
+
+    add_opt(common_arg(
+        {"--quantum-edt-theta"}, "N",
+        string_format("EDT entropy sensitivity (default: %.1f)", 1.0f),
+        [](common_params & params, const std::string & value) {
+            params.sampling.quantum_edt_theta = std::stof(value);
+        }
+    ).set_sparam());
+
+    add_opt(common_arg(
+        {"--no-quantum-edt"},
+        "Disable EDT temperature scaling (use fixed temperature for QRNG tokens)",
+        [](common_params & params) {
+            params.sampling.quantum_edt_enabled = false;
+        }
+    ).set_sparam());
+
+    add_opt(common_arg(
+        {"--quantum-statistics"},
+        "Print quantum sampling statistics at end of generation",
+        [](common_params & params) {
+            params.sampling.quantum_statistics = true;
+        }
+    ).set_sparam());
+
     add_opt(common_arg(
         {"--pooling"}, "{none,mean,cls,last,rank}",
         "pooling type for embeddings, use model default if unspecified",

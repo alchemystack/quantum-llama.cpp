@@ -185,6 +185,25 @@ struct common_params_sampling {
     std::vector<common_grammar_trigger> grammar_triggers; // optional triggers (for lazy grammars)
     std::set<llama_token>               preserved_tokens;
 
+    // Quantum sampling parameters
+    // Uses ANU QRNG with mode-based sampling (most frequent byte from hex16 data)
+
+    // Adaptive entropy-based sampling
+    bool    quantum_adaptive_sampling = true;  // Enable entropy-based greedy fallback
+    float   quantum_entropy_threshold = 0.40f; // Below this entropy, use greedy sampling (no QRNG)
+
+    // EDT (Entropy-based Dynamic Temperature) for high-entropy tokens
+    // Formula: T = edt_t0 * pow(edt_base, edt_theta / entropy)
+    // Only applies to tokens ABOVE entropy_threshold (others use greedy)
+    bool    quantum_edt_enabled       = true;  // Use EDT formula for QRNG tokens
+    float   quantum_edt_t0            = 2.0f;  // Upper bound temperature
+    float   quantum_edt_theta         = 1.0f;  // Entropy sensitivity (tuned for T=1.6 at max entropy)
+    float   quantum_edt_base          = 0.8f;  // Base N (paper recommends 0.8)
+
+    // Diagnostics
+    bool    quantum_verbose          = false;  // Enable verbose quantum sampling logging
+    bool    quantum_statistics       = false;  // Track and report quantum usage statistics
+
     std::vector<llama_logit_bias> logit_bias;     // logit biases to apply
     std::vector<llama_logit_bias> logit_bias_eog; // pre-calculated logit biases for EOG tokens
 
