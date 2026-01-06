@@ -1,0 +1,8 @@
+# Analysis Toolkit Dependencies
+
+# Core numerical and scientific computing
+numpy>=1.25.0
+scipy>=1.11.0
+
+# Visualization (optional but recommended)
+matplotlib>=3.7.0
