@@ -76,6 +76,24 @@ export ANU_API_KEY="your-key"
 | `--no-quantum-adaptive-sampling` | Always use QRNG | - |
 | `--no-quantum-edt` | Fixed temperature instead of EDT | - |
 
+## Analysis Toolkit
+
+A Python analysis toolkit is included to validate whether QRNG produces qualitatively different output:
+
+```bash
+pip install -r analysis/requirements.txt
+python analysis/examples/compare_qrng_vs_prng.py
+```
+
+The toolkit provides:
+- **QRNG stream quality monitoring**: Hurst exponent, autocorrelation, min-entropy
+- **Token trajectory analysis**: Phase space embedding, attractor detection
+- **Chaos detection**: Lyapunov exponents, criticality index, phase transitions
+- **Consciousness metrics**: Mode entropy, participation ratio, coherence
+- **Statistical comparison**: A/B testing of QRNG vs PRNG outputs
+
+See [`analysis/README.md`](analysis/README.md) for complete documentation.
+
 ## Limitations
 
 - Requires paid ANU API key
