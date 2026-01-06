@@ -25,10 +25,24 @@ Most tokens have low entropy: the model is confident. "The capital of France is 
 Tokens with high entropy represent genuine uncertainty: creative junctions, ambiguous phrasings, branching possibilities. These are where consciousness influence would matter.
 
 Implementation:
-- Entropy < 0.40: greedy sampling, no API call
-- Entropy >= 0.40: QRNG sampling with EDT temperature
+- Entropy < 0.50: greedy sampling, no API call
+- Entropy >= 0.50: QRNG sampling with EDT temperature
 
 This reduces API calls by 50-80% while focusing quantum randomness where it matters.
+
+### Token Color-Coding
+
+Generated tokens are color-coded based on the mode frequency detected in the QRNG data. Higher mode counts represent statistical anomalies that may correlate with consciousness influence:
+
+| Color | Mode Count | Meaning |
+|-------|------------|---------|
+| Grey | N/A | Deterministic (greedy, no QRNG) |
+| White | < 106 | Statistically common |
+| Pink | 106-108 | Above average frequency |
+| Red | 109-111 | Rare |
+| Purple | 112+ | Mythic rare |
+
+The expected mode count is ~80 (20,480 bytes / 256 possible values). Values above 106 represent increasingly improbable statistical events.
 
 ### EDT Temperature Scaling
 
@@ -70,7 +84,7 @@ export ANU_API_KEY="your-key"
 |----------|-------------|---------|
 | `--quantum-verbose` | Print entropy and temperature per token | off |
 | `--quantum-statistics` | Print sampling statistics at end | off |
-| `--quantum-entropy-threshold N` | Entropy cutoff for QRNG vs greedy | 0.40 |
+| `--quantum-entropy-threshold N` | Entropy cutoff for QRNG vs greedy | 0.50 |
 | `--quantum-edt-t0 N` | EDT upper temperature bound | 2.0 |
 | `--quantum-edt-theta N` | EDT entropy sensitivity | 1.0 |
 | `--no-quantum-adaptive-sampling` | Always use QRNG | - |
