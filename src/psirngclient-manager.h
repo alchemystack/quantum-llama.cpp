@@ -32,6 +32,18 @@ public:
      */
     static ANUQRNGClient* get_anu_client();
 
+    /**
+     * Get the mode value (0-255) from the last QRNG sample
+     */
+    static uint8_t get_last_mode();
+
+    /**
+     * Get the mode count (appearances) from the last QRNG sample
+     * Expected value is ~80 (20480 bytes / 256 values)
+     * Higher counts indicate statistical anomalies
+     */
+    static size_t get_last_mode_count();
+
     ~psirngclient_manager();
 
 private:

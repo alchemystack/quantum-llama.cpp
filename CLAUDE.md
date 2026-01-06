@@ -72,7 +72,7 @@ Token Logits
     ↓
 Calculate Entropy (normalized 0-1)
     ↓
-[entropy < 0.40?] ─YES─→ GREEDY (no QRNG) → Done
+[entropy < 0.50?] ─YES─→ GREEDY (no QRNG) → Done
     │
     NO
     ↓
@@ -90,8 +90,8 @@ Done
 **Key principle:** Each token selection makes a fresh API call. No buffering - this preserves temporal correlation between consciousness and token selection.
 
 ### Adaptive Entropy-Based Sampling
-- **entropy < 0.40** → Greedy sampling (no API call, saves bandwidth)
-- **entropy ≥ 0.40** → EDT temperature + QRNG sampling
+- **entropy < 0.50** → Greedy sampling (no API call, saves bandwidth)
+- **entropy ≥ 0.50** → EDT temperature + QRNG sampling
 - Typically saves 50-80% of API calls for predictable text
 
 ### EDT (Entropy-based Dynamic Temperature)

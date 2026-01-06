@@ -740,7 +740,36 @@ int main(int argc, char ** argv) {
             for (auto id : embd) {
                 const std::string token_str = common_token_to_piece(ctx, id, params.special);
 
-                LOG("%s", token_str.c_str());
+                // Color generated tokens based on quantum sampling mode count
+                if (embd.size() == 1) {
+                    // This is a generated token - apply quantum color coding
+                    uint8_t mode = 0;
+                    size_t count = 80;
+                    bool was_quantum = common_sampler_get_last_quantum_mode(smpl, &mode, &count);
+
+                    const char * color_code;
+                    if (!was_quantum) {
+                        // Greedy/deterministic: grey
+                        color_code = "\033[90m";
+                    } else if (count < 106) {
+                        // Statistically common: white (expected ~80)
+                        color_code = "\033[37m";
+                    } else if (count <= 108) {
+                        // Above average frequency: light pink
+                        color_code = "\033[38;5;218m";
+                    } else if (count <= 111) {
+                        // Rare: red
+                        color_code = "\033[31m";
+                    } else {
+                        // Mythic rare (112+): purple with bold for emphasis
+                        color_code = "\033[1;38;5;135m";
+                    }
+
+                    LOG("%s%s\033[0m", color_code, token_str.c_str());
+                } else {
+                    // Input tokens: no special coloring
+                    LOG("%s", token_str.c_str());
+                }
 
                 // Record Displayed Tokens To Log
                 // Note: Generated tokens are created one by one hence this check

@@ -77,11 +77,25 @@ public:
     const Statistics& get_statistics() const;
     void reset_statistics();
 
+    /**
+     * Get the mode value (0-255) from the last QRNG sample
+     */
+    uint8_t get_last_mode() const { return last_mode; }
+
+    /**
+     * Get the mode count (appearances) from the last QRNG sample
+     * Expected value is ~80 (20480 bytes / 256 values)
+     * Higher counts indicate statistical anomalies
+     */
+    size_t get_last_mode_count() const { return last_mode_count; }
+
 private:
     Config config;
     Statistics stats;
     mutable std::mutex mutex;
     bool initialized;
+    uint8_t last_mode = 128;       // Last mode value from QRNG (0-255)
+    size_t last_mode_count = 80;   // How many times the mode appeared (expected ~80)
 
     // Fetch hex16 data and find mode
     int fetch_and_find_mode(uint8_t* mode_out);
@@ -94,5 +108,6 @@ private:
                                      std::vector<uint8_t>& uint8_values);
 
     // Find mode (most frequent value) - returns false if tie
-    static bool find_mode(const std::vector<uint8_t>& values, uint8_t* mode_out);
+    // count_out receives the number of times the mode appeared
+    static bool find_mode(const std::vector<uint8_t>& values, uint8_t* mode_out, size_t* count_out);
 };

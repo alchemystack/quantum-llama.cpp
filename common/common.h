@@ -190,7 +190,7 @@ struct common_params_sampling {
 
     // Adaptive entropy-based sampling
     bool    quantum_adaptive_sampling = true;  // Enable entropy-based greedy fallback
-    float   quantum_entropy_threshold = 0.40f; // Below this entropy, use greedy sampling (no QRNG)
+    float   quantum_entropy_threshold = 0.50f; // Below this entropy, use greedy sampling (no QRNG)
 
     // EDT (Entropy-based Dynamic Temperature) for high-entropy tokens
     // Formula: T = edt_t0 * pow(edt_base, edt_theta / entropy)
