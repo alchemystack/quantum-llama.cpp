@@ -77,6 +77,9 @@ int ANUQRNGClient::get_random_value(double* output) {
         return -1;
     }
 
+    // Store mode value for color-coding
+    last_mode = mode_value;
+
     // Convert uint8 mode to double in [0, 1)
     *output = static_cast<double>(mode_value) / 256.0;
 
@@ -99,9 +102,11 @@ int ANUQRNGClient::fetch_and_find_mode(uint8_t* mode_out) {
             continue;
         }
 
-        // Find mode
-        if (find_mode(uint8_values, mode_out)) {
-            ANU_LOG("Found unique mode: %u (from %zu values)", *mode_out, uint8_values.size());
+        // Find mode and count
+        size_t mode_count = 0;
+        if (find_mode(uint8_values, mode_out, &mode_count)) {
+            last_mode_count = mode_count;  // Store the count for later retrieval
+            ANU_LOG("Found unique mode: %u with count %zu (from %zu values)", *mode_out, mode_count, uint8_values.size());
             return 0;
         }
 
@@ -114,7 +119,7 @@ int ANUQRNGClient::fetch_and_find_mode(uint8_t* mode_out) {
     return -1;
 }
 
-bool ANUQRNGClient::find_mode(const std::vector<uint8_t>& values, uint8_t* mode_out) {
+bool ANUQRNGClient::find_mode(const std::vector<uint8_t>& values, uint8_t* mode_out, size_t* count_out) {
     if (values.empty()) {
         return false;
     }
@@ -149,6 +154,9 @@ bool ANUQRNGClient::find_mode(const std::vector<uint8_t>& values, uint8_t* mode_
     }
 
     *mode_out = mode;
+    if (count_out) {
+        *count_out = max_count;
+    }
     return true;
 }
 

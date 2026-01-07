@@ -515,6 +515,21 @@ std::string common_sampler_prev_str(common_sampler * gsmpl, llama_context * ctx_
     return result;
 }
 
+// Get last quantum sampling info for token coloring
+// Returns true if last sample was quantum (vs greedy)
+// mode_out receives the mode value (0-255) from QRNG
+// count_out receives how many times the mode appeared (expected ~80)
+bool common_sampler_get_last_quantum_mode(const struct common_sampler * gsmpl, uint8_t * mode_out, size_t * count_out) {
+    const int n = llama_sampler_chain_n(gsmpl->chain);
+    for (int i = 0; i < n; i++) {
+        const struct llama_sampler * smpl = llama_sampler_chain_get(gsmpl->chain, i);
+        if (strcmp(llama_sampler_name(smpl), "dist") == 0) {
+            return llama_sampler_dist_get_last_info(smpl, mode_out, count_out);
+        }
+    }
+    return false;
+}
+
 char common_sampler_type_to_chr(enum common_sampler_type cnstr) {
     switch (cnstr) {
         case COMMON_SAMPLER_TYPE_DRY:         return 'd';

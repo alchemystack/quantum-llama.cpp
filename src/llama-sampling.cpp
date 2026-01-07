@@ -628,6 +628,11 @@ struct llama_sampler_dist {
     size_t total_samples;
     size_t greedy_samples;
     size_t quantum_samples;
+
+    // Last sample info for token coloring
+    uint8_t last_mode;          // Mode value (0-255) from last QRNG sample
+    size_t  last_mode_count;    // How many times the mode appeared (expected ~80)
+    bool    last_was_quantum;   // Was the last sample from QRNG (vs greedy)?
 };
 
 static const char * llama_sampler_dist_name(const struct llama_sampler * /*smpl*/) {
@@ -688,6 +693,7 @@ static void llama_sampler_dist_apply(struct llama_sampler * smpl, llama_token_da
     // ============ LOW ENTROPY: GREEDY SAMPLING ============
     if (ctx->adaptive_sampling && normalized_entropy < ctx->entropy_threshold) {
         ctx->greedy_samples++;
+        ctx->last_was_quantum = false;
         if (ctx->verbose) {
             LLAMA_LOG_INFO("%s: LOW ENTROPY (%.4f < %.4f) -> greedy\n",
                           __func__, normalized_entropy, ctx->entropy_threshold);
@@ -742,6 +748,19 @@ static void llama_sampler_dist_apply(struct llama_sampler * smpl, llama_token_da
     int rand_result = psirngclient_manager::get_random_value(&rnd);
     if (rand_result != 0) {
         GGML_ABORT("%s: quantum random value error: %d", __func__, rand_result);
+    }
+
+    // Store mode value and count for token coloring
+    ctx->last_was_quantum = true;
+    ctx->last_mode = psirngclient_manager::get_last_mode();
+    ctx->last_mode_count = psirngclient_manager::get_last_mode_count();
+
+    if (ctx->verbose) {
+        const char * rarity = (ctx->last_mode_count < 106) ? "common" :
+                              (ctx->last_mode_count <= 108) ? "above_avg" :
+                              (ctx->last_mode_count <= 111) ? "rare" : "MYTHIC";
+        LLAMA_LOG_INFO("%s: QRNG mode=%u count=%zu (%s)\n",
+                      __func__, ctx->last_mode, ctx->last_mode_count, rarity);
     }
 
     // Sample using quantum random value (inverse CDF)
@@ -801,7 +820,7 @@ struct llama_sampler * llama_sampler_init_dist(uint32_t seed) {
             /* .seed_cur                = */ seed_cur,
             /* .rng                     = */ std::mt19937(seed_cur),
             /* .adaptive_sampling       = */ false,  // Will be configured via llama_sampler_dist_set_quantum_params
-            /* .entropy_threshold       = */ 0.40f,
+            /* .entropy_threshold       = */ 0.50f,
             /* .verbose                 = */ false,
             /* .print_statistics        = */ false,
             /* .edt_enabled             = */ true,
@@ -811,6 +830,9 @@ struct llama_sampler * llama_sampler_init_dist(uint32_t seed) {
             /* .total_samples           = */ 0,
             /* .greedy_samples          = */ 0,
             /* .quantum_samples         = */ 0,
+            /* .last_mode               = */ 128,
+            /* .last_mode_count         = */ 80,
+            /* .last_was_quantum        = */ false,
         }
     );
 }
@@ -887,6 +909,24 @@ bool llama_sampler_dist_should_print_stats(const struct llama_sampler * smpl) {
     }
     const auto * ctx = (const llama_sampler_dist *) smpl->ctx;
     return ctx->print_statistics;
+}
+
+// Get last sample info for token coloring
+// Returns true if last sample was quantum, false if greedy
+// mode_out receives the mode value (0-255)
+// count_out receives how many times the mode appeared (expected ~80)
+bool llama_sampler_dist_get_last_info(const struct llama_sampler * smpl, uint8_t * mode_out, size_t * count_out) {
+    if (!smpl || strcmp(llama_sampler_name(smpl), "dist") != 0) {
+        return false;
+    }
+    const auto * ctx = (const llama_sampler_dist *) smpl->ctx;
+    if (mode_out) {
+        *mode_out = ctx->last_mode;
+    }
+    if (count_out) {
+        *count_out = ctx->last_mode_count;
+    }
+    return ctx->last_was_quantum;
 }
 
 // top-k

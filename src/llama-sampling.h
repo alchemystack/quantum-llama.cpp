@@ -51,3 +51,9 @@ LLAMA_API void llama_sampler_dist_print_stats(struct llama_sampler * smpl);
 
 // Check if statistics should be printed
 LLAMA_API bool llama_sampler_dist_should_print_stats(const struct llama_sampler * smpl);
+
+// Get last sample info for token coloring
+// Returns true if last sample was quantum, false if greedy
+// mode_out receives the mode value (0-255)
+// count_out receives how many times the mode appeared (expected ~80)
+LLAMA_API bool llama_sampler_dist_get_last_info(const struct llama_sampler * smpl, uint8_t * mode_out, size_t * count_out);
