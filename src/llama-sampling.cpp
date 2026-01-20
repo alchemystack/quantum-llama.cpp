@@ -212,7 +212,7 @@ static void llama_token_data_array_partial_sort_inplace(llama_token_data_array *
     cur_p->sorted = true;
 }
 
-static int llama_sample_dist(llama_token_data_array * cur_p, std::mt19937 & rng) {
+static int llama_sample_dist(llama_token_data_array * cur_p, std::mt19937 & /*rng*/) {
     double chance;
 
     // Get quantum random value (fresh API call each time)

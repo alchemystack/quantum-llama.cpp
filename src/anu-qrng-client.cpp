@@ -29,7 +29,9 @@
 
 // ANU QRNG API endpoint
 static const char* ANU_API_HOST = "api.quantumnumbers.anu.edu.au";
+#ifdef _WIN32
 static const wchar_t* ANU_API_HOST_W = L"api.quantumnumbers.anu.edu.au";
+#endif
 
 ANUQRNGClient::ANUQRNGClient(const Config& config)
     : config(config), stats(), initialized(false) {
@@ -374,7 +376,7 @@ int ANUQRNGClient::http_request_hex16(std::vector<uint8_t>& uint8_values) {
 
 #else
 // Linux/Mac implementation using libcurl
-static size_t curl_write_callback(void* contents, size_t size, size_t nmemb, void* userp) {
+static size_t anu_curl_write_callback(void* contents, size_t size, size_t nmemb, void* userp) {
     size_t total_size = size * nmemb;
     std::vector<uint8_t>* vec = static_cast<std::vector<uint8_t>*>(userp);
     const uint8_t* data = static_cast<const uint8_t*>(contents);
@@ -406,7 +408,7 @@ int ANUQRNGClient::http_request_hex16(std::vector<uint8_t>& uint8_values) {
 
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_callback);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, anu_curl_write_callback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &json_response);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, config.timeout_ms);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
