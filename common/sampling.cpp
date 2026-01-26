@@ -5,6 +5,7 @@
 #include "../src/llama-sampling.h"
 
 #include <cmath>
+#include <cstring>
 #include <unordered_map>
 #include <algorithm>
 
