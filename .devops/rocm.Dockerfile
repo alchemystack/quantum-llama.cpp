@@ -45,7 +45,7 @@ RUN HIPCXX="$(hipconfig -l)/clang" HIP_PATH="$(hipconfig -R)" \
     && cmake --build build --config Release -j$(nproc)
 
 RUN mkdir -p /app/lib \
-    && find build \( -name "*.so" -o -name "*.so.*" \) -exec cp {} /app/lib \;
+    && find build -name "*.so*" -exec cp -P {} /app/lib \;
 
 RUN mkdir -p /app/full \
     && cp build/bin/* /app/full \
@@ -98,7 +98,7 @@ FROM base AS light
 
 ENV LD_LIBRARY_PATH=/app:$LD_LIBRARY_PATH
 
-COPY --from=build /app/full/llama-cli /app
+COPY --from=build /app/full/llama-cli /app/full/llama-completion /app
 
 WORKDIR /app
 

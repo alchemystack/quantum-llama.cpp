@@ -24,10 +24,6 @@
 #include <arm_neon.h>
 #endif
 
-#if defined(__F16C__)
-#include <immintrin.h>
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -102,7 +98,7 @@ static bool ggml_op_is_empty(enum ggml_op op) {
     }
 }
 
-static inline float ggml_softplus(float input) {
+static inline float ggml_compute_softplus_f32(float input) {
     return (input > 20.0f) ? input : logf(1 + expf(input));
 }
 //
@@ -682,6 +678,7 @@ static inline bool ggml_can_fuse_subgraph(const struct ggml_cgraph * cgraph,
 #endif
 
 #ifdef __cplusplus
+#include <array>
 #include <initializer_list>
 #include <vector>
 
@@ -695,6 +692,21 @@ inline bool ggml_can_fuse_subgraph(const struct ggml_cgraph *          cgraph,
                                    std::initializer_list<enum ggml_op> ops,
                                    std::initializer_list<int>          outputs = {}) {
     return ggml_can_fuse_subgraph(cgraph, start_idx, ops.size(), ops.begin(), outputs.begin(), outputs.size());
+}
+
+// Return true if the edges in the graph match expectations.
+inline bool ggml_check_edges(const struct ggml_cgraph *                cgraph,
+                             int                                       start_idx,
+                             std::initializer_list<std::array<int, 3>> edges) {
+    for (const auto & edge : edges) {
+        int dst_node = edge[0];
+        int src_idx  = edge[1];
+        int src_node = edge[2];
+        if (cgraph->nodes[start_idx + dst_node]->src[src_idx] != cgraph->nodes[start_idx + src_node]) {
+            return false;
+        }
+    }
+    return true;
 }
 
 // expose GGUF internals for test code

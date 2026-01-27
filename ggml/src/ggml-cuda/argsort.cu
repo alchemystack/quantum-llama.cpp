@@ -22,13 +22,13 @@ static __global__ void init_offsets(int * offsets, const int ncols, const int nr
 }
 
 #ifdef GGML_CUDA_USE_CUB
-static void argsort_f32_i32_cuda_cub(ggml_cuda_pool & pool,
-                                     const float *    x,
-                                     int *            dst,
-                                     const int        ncols,
-                                     const int        nrows,
-                                     ggml_sort_order  order,
-                                     cudaStream_t     stream) {
+void argsort_f32_i32_cuda_cub(ggml_cuda_pool & pool,
+                              const float *    x,
+                              int *            dst,
+                              const int        ncols,
+                              const int        nrows,
+                              ggml_sort_order  order,
+                              cudaStream_t     stream) {
     ggml_cuda_pool_alloc<int>   temp_indices_alloc(pool, ncols * nrows);
     ggml_cuda_pool_alloc<float> temp_keys_alloc(pool, ncols * nrows);
     ggml_cuda_pool_alloc<int>   offsets_alloc(pool, nrows + 1);
@@ -44,33 +44,54 @@ static void argsort_f32_i32_cuda_cub(ggml_cuda_pool & pool,
     const dim3 offset_grid((nrows + block_size - 1) / block_size);
     init_offsets<<<offset_grid, block_size, 0, stream>>>(d_offsets, ncols, nrows);
 
-    cudaMemcpyAsync(temp_keys, x, ncols * nrows * sizeof(float), cudaMemcpyDeviceToDevice, stream);
+    CUDA_CHECK(cudaMemcpyAsync(temp_keys, x, ncols * nrows * sizeof(float), cudaMemcpyDeviceToDevice, stream));
 
     size_t temp_storage_bytes = 0;
 
     if (order == GGML_SORT_ORDER_ASC) {
-        DeviceSegmentedRadixSort::SortPairs(nullptr, temp_storage_bytes, temp_keys, temp_keys,  // keys (in-place)
-                                            temp_indices, dst,                                  // values (indices)
-                                            ncols * nrows, nrows,                            // num items, num segments
-                                            d_offsets, d_offsets + 1, 0, sizeof(float) * 8,  // all bits
-                                            stream);
+        if (nrows == 1) {
+            DeviceRadixSort::SortPairs(nullptr, temp_storage_bytes, temp_keys, temp_keys,  // keys (in-place)
+                                       temp_indices, dst,                                  // values (indices)
+                                       ncols, 0, sizeof(float) * 8, stream);
+        } else {
+            DeviceSegmentedSort::SortPairs(nullptr, temp_storage_bytes, temp_keys, temp_keys,  // keys (in-place)
+                                           temp_indices, dst,                                  // values (indices)
+                                           ncols * nrows, nrows,  // num items, num segments
+                                           d_offsets, d_offsets + 1, stream);
+        }
     } else {
-        DeviceSegmentedRadixSort::SortPairsDescending(nullptr, temp_storage_bytes, temp_keys, temp_keys, temp_indices,
-                                                      dst, ncols * nrows, nrows, d_offsets, d_offsets + 1, 0,
-                                                      sizeof(float) * 8, stream);
+        if (nrows == 1) {
+            DeviceRadixSort::SortPairsDescending(nullptr, temp_storage_bytes, temp_keys, temp_keys,  // keys (in-place)
+                                                 temp_indices, dst,                                  // values (indices)
+                                                 ncols, 0, sizeof(float) * 8, stream);
+        } else {
+            DeviceSegmentedSort::SortPairsDescending(nullptr, temp_storage_bytes, temp_keys, temp_keys, temp_indices,
+                                                     dst, ncols * nrows, nrows, d_offsets, d_offsets + 1, stream);
+        }
     }
 
     ggml_cuda_pool_alloc<uint8_t> temp_storage_alloc(pool, temp_storage_bytes);
     void *                        d_temp_storage = temp_storage_alloc.get();
 
     if (order == GGML_SORT_ORDER_ASC) {
-        DeviceSegmentedRadixSort::SortPairs(d_temp_storage, temp_storage_bytes, temp_keys, temp_keys, temp_indices, dst,
-                                            ncols * nrows, nrows, d_offsets, d_offsets + 1, 0, sizeof(float) * 8,
-                                            stream);
+        if (nrows == 1) {
+            DeviceRadixSort::SortPairs(d_temp_storage, temp_storage_bytes, temp_keys, temp_keys,  // keys (in-place)
+                                       temp_indices, dst,  // values (indices)
+                                       ncols, 0, sizeof(float) * 8, stream);
+        } else {
+            DeviceSegmentedSort::SortPairs(d_temp_storage, temp_storage_bytes, temp_keys, temp_keys, temp_indices, dst,
+                                           ncols * nrows, nrows, d_offsets, d_offsets + 1, stream);
+        }
     } else {
-        DeviceSegmentedRadixSort::SortPairsDescending(d_temp_storage, temp_storage_bytes, temp_keys, temp_keys,
-                                                      temp_indices, dst, ncols * nrows, nrows, d_offsets, d_offsets + 1,
-                                                      0, sizeof(float) * 8, stream);
+        if (nrows == 1) {
+            DeviceRadixSort::SortPairsDescending(d_temp_storage, temp_storage_bytes, temp_keys, temp_keys,  // keys (in-place)
+                                                 temp_indices, dst,                                  // values (indices)
+                                                 ncols, 0, sizeof(float) * 8, stream);
+        } else {
+            DeviceSegmentedSort::SortPairsDescending(d_temp_storage, temp_storage_bytes, temp_keys, temp_keys,
+                                                     temp_indices, dst, ncols * nrows, nrows, d_offsets, d_offsets + 1,
+                                                     stream);
+        }
     }
 }
 #endif  // GGML_CUDA_USE_CUB
@@ -87,7 +108,7 @@ template<ggml_sort_order order>
 static __global__ void k_argsort_f32_i32(const float * x, int * dst, const int ncols, int ncols_pad) {
     // bitonic sort
     int col = threadIdx.x;
-    int row = blockIdx.y;
+    int row = blockIdx.x;
 
     if (col >= ncols_pad) {
         return;
@@ -141,17 +162,17 @@ static int next_power_of_2(int x) {
     return n;
 }
 
-static void argsort_f32_i32_cuda_bitonic(const float *   x,
-                                         int *           dst,
-                                         const int       ncols,
-                                         const int       nrows,
-                                         ggml_sort_order order,
-                                         cudaStream_t    stream) {
+void argsort_f32_i32_cuda_bitonic(const float *   x,
+                                  int *           dst,
+                                  const int       ncols,
+                                  const int       nrows,
+                                  ggml_sort_order order,
+                                  cudaStream_t    stream) {
     // bitonic sort requires ncols to be power of 2
     const int ncols_pad = next_power_of_2(ncols);
 
     const dim3 block_dims(ncols_pad, 1, 1);
-    const dim3 block_nums(1, nrows, 1);
+    const dim3 block_nums(nrows, 1, 1);
     const size_t shared_mem = ncols_pad * sizeof(int);
 
     // FIXME: this limit could be raised by ~2-4x on Ampere or newer

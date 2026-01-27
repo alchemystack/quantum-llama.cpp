@@ -50,12 +50,20 @@ add_library(${TARGET} STATIC
     base64.hpp
     chat-parser.cpp
     chat-parser.h
+    chat-parser-xml-toolcall.h
+    chat-parser-xml-toolcall.cpp
+    chat-peg-parser.cpp
+    chat-peg-parser.h
     chat.cpp
     chat.h
     common.cpp
     common.h
     console.cpp
     console.h
+    debug.cpp
+    debug.h
+    download.cpp
+    download.h
     http.h
     json-partial.cpp
     json-partial.h
@@ -65,65 +73,33 @@ add_library(${TARGET} STATIC
     log.h
     ngram-cache.cpp
     ngram-cache.h
+    peg-parser.cpp
+    peg-parser.h
+    preset.cpp
+    preset.h
     regex-partial.cpp
     regex-partial.h
     sampling.cpp
     sampling.h
     speculative.cpp
     speculative.h
+    unicode.cpp
+    unicode.h
     )
+
+target_include_directories(${TARGET} PUBLIC . ../vendor)
+target_compile_features   (${TARGET} PUBLIC cxx_std_17)
 
 if (BUILD_SHARED_LIBS)
     set_target_properties(${TARGET} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
 
+# TODO: use list(APPEND LLAMA_COMMON_EXTRA_LIBS ...)
 set(LLAMA_COMMON_EXTRA_LIBS build_info)
 
-# Use curl to download model url
-if (LLAMA_CURL)
-    find_package(CURL)
-    if (NOT CURL_FOUND)
-        message(FATAL_ERROR "Could NOT find CURL. Hint: to disable this feature, set -DLLAMA_CURL=OFF")
-    endif()
-    target_compile_definitions(${TARGET} PUBLIC LLAMA_USE_CURL)
-    include_directories(${CURL_INCLUDE_DIRS})
-    set(LLAMA_COMMON_EXTRA_LIBS ${LLAMA_COMMON_EXTRA_LIBS} ${CURL_LIBRARIES})
-endif()
-
-if (LLAMA_OPENSSL)
-    find_package(OpenSSL)
-    if (OpenSSL_FOUND)
-        include(CheckCSourceCompiles)
-        set(SAVED_CMAKE_REQUIRED_INCLUDES ${CMAKE_REQUIRED_INCLUDES})
-        set(CMAKE_REQUIRED_INCLUDES ${OPENSSL_INCLUDE_DIR})
-        check_c_source_compiles("
-        #include <openssl/opensslv.h>
-        #if defined(OPENSSL_IS_BORINGSSL) || defined(LIBRESSL_VERSION_NUMBER)
-        #    if OPENSSL_VERSION_NUMBER < 0x1010107f
-        #        error bad version
-        #    endif
-        #else
-        #    if OPENSSL_VERSION_NUMBER < 0x30000000L
-        #        error bad version
-        #    endif
-        #endif
-        int main() { return 0; }
-        " OPENSSL_VERSION_SUPPORTED)
-        set(CMAKE_REQUIRED_INCLUDES ${SAVED_CMAKE_REQUIRED_INCLUDES})
-        if (OPENSSL_VERSION_SUPPORTED)
-            message(STATUS "OpenSSL found: ${OPENSSL_VERSION}")
-            target_compile_definitions(${TARGET} PUBLIC CPPHTTPLIB_OPENSSL_SUPPORT)
-            target_link_libraries(${TARGET} PUBLIC OpenSSL::SSL OpenSSL::Crypto)
-            if (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-                target_compile_definitions(${TARGET} PUBLIC CPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN)
-                find_library(CORE_FOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
-                find_library(SECURITY_FRAMEWORK Security REQUIRED)
-                target_link_libraries(${TARGET} PUBLIC ${CORE_FOUNDATION_FRAMEWORK} ${SECURITY_FRAMEWORK})
-            endif()
-        endif()
-    else()
-        message(STATUS "OpenSSL not found, SSL support disabled")
-    endif()
+if (LLAMA_HTTPLIB)
+    target_compile_definitions(${TARGET} PUBLIC LLAMA_USE_HTTPLIB)
+    set(LLAMA_COMMON_EXTRA_LIBS ${LLAMA_COMMON_EXTRA_LIBS} cpp-httplib)
 endif()
 
 if (LLAMA_LLGUIDANCE)
@@ -170,30 +146,4 @@ if (LLAMA_LLGUIDANCE)
     set(LLAMA_COMMON_EXTRA_LIBS ${LLAMA_COMMON_EXTRA_LIBS} llguidance ${LLGUIDANCE_PLATFORM_LIBS})
 endif ()
 
-target_include_directories(${TARGET} PUBLIC . ../vendor)
-target_compile_features   (${TARGET} PUBLIC cxx_std_17)
-target_link_libraries     (${TARGET} PRIVATE ${LLAMA_COMMON_EXTRA_LIBS} PUBLIC llama Threads::Threads)
-
-
-#
-# copy the license files
-#
-
-# Check if running in GitHub Actions
-if (DEFINED ENV{GITHUB_ACTIONS} AND "$ENV{GITHUB_ACTIONS}" STREQUAL "true")
-    message(STATUS "Running inside GitHub Actions - copying license files")
-
-    # Copy all files from licenses/ to build/bin/
-    file(GLOB LICENSE_FILES "${CMAKE_SOURCE_DIR}/licenses/*")
-    foreach(LICENSE_FILE ${LICENSE_FILES})
-        get_filename_component(FILENAME ${LICENSE_FILE} NAME)
-        add_custom_command(
-            POST_BUILD
-            TARGET ${TARGET}
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${LICENSE_FILE}"
-                "$<TARGET_FILE_DIR:llama>/${FILENAME}"
-            COMMENT "Copying ${FILENAME} to ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
-        message(STATUS "Copying ${LICENSE_FILE} to ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${FILENAME}")
-    endforeach()
-endif()
+target_link_libraries(${TARGET} PRIVATE ${LLAMA_COMMON_EXTRA_LIBS} PUBLIC llama Threads::Threads)
