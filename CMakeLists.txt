@@ -256,6 +256,7 @@ endif()
 #
 
 add_subdirectory(libpsirngclient)
+add_subdirectory(libpsijent)
 
 #
 # install

@@ -31,6 +31,12 @@ cd build/bin
 
 **Note:** quantum-llama.cpp currently does not support `-DLLAMA_CURL=ON`.
 
+#### Fallback RNG option
+
+quantum-llama.cpp includes [libpsijent](https://github.com/nullspook/libpsijent.git)
+hardware timing jitter RNG as a fallback if a psirng server is not available.
+Enable it by setting `PSIJENT_FALLBACK=ON` before running `llama-*` programs.
+
 ---
 
 # llama.cpp
@@ -68,7 +74,7 @@ LLM inference in C/C++
 
 Getting started with llama.cpp is straightforward. Here are several ways to install it on your machine:
 
-- Install `llama.cpp` using [brew, nix or winget](docs/install.md)
+- Install `llama.cpp` using [brew, nix, or winget](docs/install.md)
 - Run with Docker - see our [Docker documentation](docs/docker.md)
 - Download pre-built binaries from the [releases page](https://github.com/ggml-org/llama.cpp/releases)
 - Build from source by cloning this repository - check out [our build guide](docs/build.md)
@@ -94,7 +100,7 @@ The main goal of `llama.cpp` is to enable LLM inference with minimal setup and s
 range of hardware - locally and in the cloud.
 
 - Plain C/C++ implementation without any dependencies
-- Apple silicon is a first-class citizen - optimized via ARM NEON, Accelerate and Metal frameworks
+- Apple silicon is a first-class citizen - optimized via ARM NEON, Accelerate, and Metal frameworks
 - AVX, AVX2, AVX512 and AMX support for x86 architectures
 - RVV, ZVFH, ZFH, ZICBOP and ZIHINTPAUSE support for RISC-V architectures
 - 1.5-bit, 2-bit, 3-bit, 4-bit, 5-bit, 6-bit, and 8-bit integer quantization for faster inference and reduced memory use
@@ -341,7 +347,7 @@ After downloading a model, use the CLI tools to run it locally - see below.
 
 `llama.cpp` requires the model to be stored in the [GGUF](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md) file format. Models in other data formats can be converted to GGUF using the `convert_*.py` Python scripts in this repo.
 
-The Hugging Face platform provides a variety of online tools for converting, quantizing and hosting models with `llama.cpp`:
+The Hugging Face platform provides a variety of online tools for converting, quantizing, and hosting models with `llama.cpp`:
 
 - Use the [GGUF-my-repo space](https://huggingface.co/spaces/ggml-org/gguf-my-repo) to convert to GGUF format and quantize model weights to smaller sizes
 - Use the [GGUF-my-LoRA space](https://huggingface.co/spaces/ggml-org/gguf-my-lora) to convert LoRA adapters to GGUF format (more info: https://github.com/ggml-org/llama.cpp/discussions/10123)
@@ -539,7 +545,7 @@ To learn more about model quantization, [read this documentation](tools/quantize
 - Contributors can open PRs
 - Collaborators will be invited based on contributions
 - Maintainers can push to branches in the `llama.cpp` repo and merge PRs into the `master` branch
-- Any help with managing issues, PRs and projects is very appreciated!
+- Any help with managing issues, PRs, and projects is very appreciated!
 - See [good first issues](https://github.com/ggml-org/llama.cpp/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for tasks suitable for first contributions
 - Read the [CONTRIBUTING.md](CONTRIBUTING.md) for more information
 - Make sure to read this: [Inference at the edge](https://github.com/ggml-org/llama.cpp/discussions/205)

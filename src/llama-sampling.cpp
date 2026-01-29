@@ -3,7 +3,7 @@
 #include "llama-impl.h"
 #include "llama-vocab.h"
 #include "llama-grammar.h"
-#include "psirngclient-manager.h"
+#include "psirng-wrapper.h"
 
 #include "ggml-cpp.h"
 
@@ -216,11 +216,7 @@ static void llama_token_data_array_partial_sort_inplace(llama_token_data_array *
 }
 
 static int llama_sample_dist(llama_token_data_array * cur_p, std::mt19937 & rng) {
-    double chance;
-    int rand_result = psirngclient_randuniform(psirngclient_manager::get_psirngclient(), &chance, 1, 0.0, 1.0);
-    if (rand_result != PSIRNGCLIENT_RESULT_OK) {
-        GGML_ABORT("%s: psirngclient_randuniform error: %d", __func__, rand_result);
-    }
+    const double chance = psirng_wrapper::uniform01();
 
     double cumulative = 0.0;
     for (size_t i = 0; i < cur_p->size; ++i) {
@@ -1060,11 +1056,7 @@ static void llama_sampler_dist_apply(struct llama_sampler * smpl, llama_token_da
     // sample from the obtained probabilities and normalize the probs in a single pass
     // this is ~3x faster on Mac with full gpt-oss vocab than the version below
     //
-    double rnd;
-    int rand_result = psirngclient_randuniform(psirngclient_manager::get_psirngclient(), &rnd, 1, 0.0, 1.0);
-    if (rand_result != PSIRNGCLIENT_RESULT_OK) {
-        GGML_ABORT("%s: psirngclient_randuniform error: %d", __func__, rand_result);
-    }
+    const double rnd = psirng_wrapper::uniform01();
           double sum_run = 0.0f;
     const double sum_tgt = sum_cum*rnd;
 
@@ -2140,12 +2132,7 @@ static void llama_sample_xtc_apply(struct llama_sampler * smpl, llama_token_data
         return;
     }
 
-    double chance;
-    int rand_result = psirngclient_randuniform(psirngclient_manager::get_psirngclient(), &chance, 1, 0.0, 1.0);
-    if (rand_result != PSIRNGCLIENT_RESULT_OK) {
-        GGML_ABORT("%s: psirngclient_randuniform error: %d", __func__, rand_result);
-    }
-    if (chance > ctx->probability) {
+    if (double chance = psirng_wrapper::uniform01(); chance > ctx->probability) {
         return;
     }
 

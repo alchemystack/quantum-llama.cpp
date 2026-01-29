@@ -139,8 +139,8 @@ add_library(llama
             models/xverse.cpp
             models/mistral3.cpp
             models/graph-context-mamba.cpp
-            psirngclient-manager.cpp
-            psirngclient-manager.h
+            psirng-wrapper.cpp
+            psirng-wrapper.h
             )
 
 set_target_properties(llama PROPERTIES
@@ -150,10 +150,10 @@ set_target_properties(llama PROPERTIES
 )
 
 target_include_directories(llama PRIVATE .)
-target_include_directories(llama PUBLIC ../include ../libpsirngclient/src)
+target_include_directories(llama PUBLIC ../include ../libpsirngclient/src ../libpsijent/src)
 target_compile_features   (llama PRIVATE cxx_std_17) # don't bump
 
-target_link_libraries(llama PUBLIC ggml psirngclient)
+target_link_libraries(llama PUBLIC ggml psirngclient psijent)
 
 if (BUILD_SHARED_LIBS)
     set_target_properties(llama PROPERTIES POSITION_INDEPENDENT_CODE ON)
