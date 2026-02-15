@@ -1,0 +1,4 @@
+{
+  "setup_script": "git submodule update --init --recursive && cmake -B build -DLLAMA_CURL=OFF && cmake --build build --config Release -j",
+  "verification_script": "git clang-format --diff HEAD~1"
+}
