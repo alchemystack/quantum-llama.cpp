@@ -1,3 +1,6 @@
 [submodule "libpsirngclient"]
 	path = libpsirngclient
 	url = https://github.com/nullspook/libpsirngclient.git
+[submodule "libpsijent"]
+	path = libpsijent
+	url = https://github.com/nullspook/libpsijent.git

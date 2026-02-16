@@ -8,6 +8,7 @@ extern "C" {
 #include <AEEStdErr.h>
 #include <inttypes.h>
 #include <remote.h>
+#include <rpcmem.h>
 #include <stdbool.h>
 
 /* Offset to differentiate HLOS and Hexagon error codes.
@@ -64,6 +65,7 @@ extern "C" {
 #    pragma weak remote_handle64_control
 #    pragma weak fastrpc_mmap
 #    pragma weak fastrpc_munmap
+#    pragma weak rpcmem_alloc2
 #endif
 
 #if !defined(_WINDOWS)
