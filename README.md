@@ -1,6 +1,6 @@
 # quantum-llama.cpp
 
-A [llama.cpp](https://github.com/ggml-org/llama.cpp) fork that replaces pseudorandom token sampling with quantum random numbers from the [ANU QRNG API](https://quantumnumbers.anu.edu.au/). The output is co-authored by quantum events at the moment of generation.
+A [llama.cpp](https://github.com/ggml-org/llama.cpp) fork that replaces pseudorandom token sampling with quantum random numbers from the [ANU QRNG API](https://quantumnumbers.anu.edu.au/) or [Qbert QRNG API](https://qbert.cipherstone.co/) (by Cipherstone). The output is co-authored by quantum events at the moment of generation.
 
 ## Why Quantum Randomness?
 
@@ -16,7 +16,7 @@ This project treats that hypothesis seriously enough to build proper infrastruct
 
 Raw QRNG output contains both quantum signal and classical noise (thermal effects, detector bias). Simple truncation or hashing destroys potential consciousness influence by making arbitrary outputs impossible to achieve through bit manipulation.
 
-Our approach: fetch 20,480 bytes from ANU's hex16 endpoint, find the statistical mode (most frequent byte value), use that single value for sampling. This preserves the ability to "select" any output (0-255) while amplifying weak signals through statistical redundancy. Ties trigger a fresh API call.
+Our approach: fetch 20,480 bytes from the QRNG provider's hex16 endpoint, find the statistical mode (most frequent byte value), use that single value for sampling. This preserves the ability to "select" any output (0-255) while amplifying weak signals through statistical redundancy. Ties trigger a fresh API call.
 
 ### Adaptive Entropy-Based Sampling
 
@@ -62,7 +62,11 @@ This adds latency but ensures temporal correlation between user state and quantu
 
 ## Quick Start
 
-1. Get an ANU API key (paid, available via [AWS Marketplace](https://aws.amazon.com/marketplace/saas/ordering?productId=7deee54b-f2b9-4a20-9818-cde75521f3f3))
+Two QRNG providers are supported: **ANU** (default) and **Qbert** (invite-only, by Cipherstone). Select with `--qrng-api`.
+
+1. Get an API key:
+   - **ANU**: Available via [AWS Marketplace](https://aws.amazon.com/marketplace/saas/ordering?productId=7deee54b-f2b9-4a20-9818-cde75521f3f3)
+   - **Qbert**: Invite-only. Contact the Cipherstone administrator to request access.
 
 2. Clone and build:
 ```bash
@@ -74,14 +78,20 @@ cmake --build build --config Release
 
 3. Set your API key and run:
 ```bash
+# ANU (default)
 export ANU_API_KEY="your-key"
 ./build/bin/llama-cli -m model.gguf -p "prompt" -n 128 -no-cnv
+
+# Qbert
+export QBERT_API_KEY="your-key"
+./build/bin/llama-cli -m model.gguf -p "prompt" -n 128 -no-cnv --qrng-api qbert
 ```
 
 ## CLI Arguments
 
 | Argument | Description | Default |
 |----------|-------------|---------|
+| `--qrng-api {anu,qbert}` | Select QRNG API provider | anu |
 | `--quantum-verbose` | Print entropy and temperature per token | off |
 | `--quantum-statistics` | Print sampling statistics at end | off |
 | `--quantum-entropy-threshold N` | Entropy cutoff for QRNG vs greedy | 0.50 |
@@ -92,7 +102,7 @@ export ANU_API_KEY="your-key"
 
 ## Limitations
 
-- Requires paid ANU API key
+- Requires an API key (ANU or Qbert)
 - One API call per high-entropy token adds ~100-500ms latency
 - No support for `-DLLAMA_CURL=ON`
 - Consciousness influence on quantum events remains an open question in physics

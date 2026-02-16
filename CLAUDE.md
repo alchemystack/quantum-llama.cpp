@@ -78,7 +78,7 @@ Calculate Entropy (normalized 0-1)
     ↓
 Apply EDT Temperature: T = T₀ × 0.8^(θ/entropy)
     ↓
-ANU API call (hex16, length=1024, size=10)
+QRNG API call (hex16, length=1024, size=10)
     ↓
 Find mode of ~20K uint8 values
     ↓
