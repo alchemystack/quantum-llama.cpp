@@ -3,7 +3,7 @@
 #include "llama-impl.h"
 #include "llama-vocab.h"
 #include "llama-grammar.h"
-#include "psirng-wrapper.h"
+#include "psirngclient-manager.h"
 
 #include "ggml-cpp.h"
 
@@ -1062,6 +1062,11 @@ struct llama_sampler_dist : public llama_sampler_backend {
     uint8_t last_mode;          // Mode value (0-255) from last QRNG sample
     size_t  last_mode_count;    // How many times the mode appeared (expected ~80)
     bool    last_was_quantum;   // Was the last sample from QRNG (vs greedy)?
+
+    // backend input
+    struct ggml_tensor *    inp_uniform;
+    ggml_context_ptr        inp_ctx;
+    ggml_backend_buffer_ptr inp_buf;
 };
 
 static const char * llama_sampler_dist_name(const struct llama_sampler * smpl) {
@@ -1356,6 +1361,7 @@ struct llama_sampler * llama_sampler_init_dist(uint32_t seed) {
     return llama_sampler_init(
         /* .iface = */ &llama_sampler_dist_i,
         /* .ctx   = */ new llama_sampler_dist {
+            ("dist"),
             /* .seed                    = */ seed,
             /* .seed_cur                = */ seed_cur,
             /* .rng                     = */ std::mt19937(seed_cur),
@@ -1373,6 +1379,9 @@ struct llama_sampler * llama_sampler_init_dist(uint32_t seed) {
             /* .last_mode               = */ 128,
             /* .last_mode_count         = */ 80,
             /* .last_was_quantum        = */ false,
+            /* .inp_uniform             = */ nullptr,
+            /* .inp_ctx                 = */ nullptr,
+            /* .inp_buf                 = */ nullptr,
         }
     );
 }
