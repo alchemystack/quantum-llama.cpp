@@ -15,6 +15,14 @@
 class psirngclient_manager {
 public:
     /**
+     * Configure QRNG API provider before first use.
+     * Must be called before get_random_value() / is_healthy() / get_instance().
+     *
+     * @param qrng_api Provider name: "anu" (default) or "qbert"
+     */
+    static void configure(const std::string & qrng_api);
+
+    /**
      * Get a quantum random value for token sampling
      *
      * @param output Pointer to store the random value (0.0 to 1.0)
@@ -23,7 +31,7 @@ public:
     static int get_random_value(double* output);
 
     /**
-     * Check if ANU QRNG is connected
+     * Check if QRNG is connected
      */
     static bool is_healthy();
 
@@ -50,6 +58,8 @@ private:
     psirngclient_manager();
 
     static psirngclient_manager& get_instance();
+
+    static std::string s_qrng_api;  // "anu" or "qbert", set via configure()
 
     std::unique_ptr<ANUQRNGClient> anu_client;
     bool initialized;

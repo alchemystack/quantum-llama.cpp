@@ -27,9 +27,7 @@
 #define ANU_LOG(fmt, ...) ((void)0)
 #endif
 
-// ANU QRNG API endpoint
-static const char* ANU_API_HOST = "api.quantumnumbers.anu.edu.au";
-static const wchar_t* ANU_API_HOST_W = L"api.quantumnumbers.anu.edu.au";
+// ANU_API_HOST / ANU_API_HOST_W removed — host is now config.api_host
 
 ANUQRNGClient::ANUQRNGClient(const Config& config)
     : config(config), stats(), initialized(false) {
@@ -256,10 +254,13 @@ int ANUQRNGClient::http_request_hex16(std::vector<uint8_t>& uint8_values) {
     WinHttpSetTimeouts(hSession, config.timeout_ms, config.timeout_ms,
                       config.timeout_ms, config.timeout_ms);
 
+    // Convert api_host to wide string for WinHTTP
+    std::wstring api_host_w(config.api_host.begin(), config.api_host.end());
+
     // Connect
     HINTERNET hConnect = WinHttpConnect(
         hSession,
-        ANU_API_HOST_W,
+        api_host_w.c_str(),
         INTERNET_DEFAULT_HTTPS_PORT,
         0
     );
@@ -392,8 +393,8 @@ int ANUQRNGClient::http_request_hex16(std::vector<uint8_t>& uint8_values) {
 
     // Build URL: ?length=1024&size=10&type=hex16
     std::string url = "https://";
-    url += ANU_API_HOST;
-    url += "?length=1024&size=10&type=hex16";
+    url += config.api_host;
+    url += "/?length=1024&size=10&type=hex16";
 
     ANU_LOG("Requesting hex16 data from ANU QRNG (length=1024, size=10)...");
 

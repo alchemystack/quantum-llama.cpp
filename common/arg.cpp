@@ -2479,6 +2479,17 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     ).set_sparam());
 
     add_opt(common_arg(
+        {"--qrng-api"}, "{anu,qbert}",
+        "Select QRNG API provider (default: anu)",
+        [](common_params & params, const std::string & value) {
+            if (value != "anu" && value != "qbert") {
+                throw std::invalid_argument("invalid --qrng-api value: '" + value + "' (must be 'anu' or 'qbert')");
+            }
+            params.sampling.quantum_qrng_api = value;
+        }
+    ).set_sparam());
+
+    add_opt(common_arg(
         {"--quantum-verbose"},
         "Enable verbose quantum sampling logging",
         [](common_params & params) {

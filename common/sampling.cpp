@@ -3,6 +3,7 @@
 #include "common.h"
 #include "log.h"
 #include "../src/llama-sampling.h"
+#include "../src/psirngclient-manager.h"
 
 #include <cmath>
 #include <unordered_map>
@@ -274,6 +275,9 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                     GGML_ASSERT(false && "unknown sampler type");
             }
         }
+        // Configure QRNG provider before dist sampler triggers singleton init
+        psirngclient_manager::configure(params.quantum_qrng_api);
+
         // Add dist sampler
         struct llama_sampler * dist_sampler = llama_sampler_init_dist(params.seed);
         llama_sampler_chain_add(result->chain, dist_sampler);

@@ -103,7 +103,9 @@ Done
 
 ## Running with Quantum RNG
 
-### ANU QRNG Setup (Required)
+Two QRNG providers are supported: **ANU** (default) and **Qbert**. Select with `--qrng-api`.
+
+### ANU QRNG Setup (Default)
 
 1. Get your FREE API key at: https://quantumnumbers.anu.edu.au/
 
@@ -124,9 +126,31 @@ $env:ANU_API_KEY="your-api-key-here"
 ./build/bin/llama-cli -m model.gguf -p "prompt" -n 128 -no-cnv
 ```
 
+### Qbert QRNG Setup (Alternative)
+
+Qbert is an invite-only QRNG API by Cipherstone. The request/response format is identical to ANU.
+
+1. Set the environment variable:
+```bash
+# Linux/Mac
+export QBERT_API_KEY="your-api-key-here"
+
+# Windows CMD
+set QBERT_API_KEY=your-api-key-here
+
+# PowerShell
+$env:QBERT_API_KEY="your-api-key-here"
+```
+
+2. Run with `--qrng-api qbert`:
+```bash
+./build/bin/llama-cli -m model.gguf -p "prompt" -n 128 -no-cnv --qrng-api qbert
+```
+
 ### Quantum CLI Arguments
 | Argument | Description | Default |
 |----------|-------------|---------|
+| `--qrng-api {anu,qbert}` | Select QRNG API provider | anu |
 | `--quantum-verbose` | Show entropy/temperature for each token | off |
 | `--quantum-statistics` | Print sampling statistics at end | off |
 | `--quantum-entropy-threshold N` | Entropy cutoff for greedy vs QRNG | 0.40 |

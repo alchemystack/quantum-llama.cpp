@@ -13,6 +13,13 @@
 #define QRNG_LOG(fmt, ...) ((void)0)
 #endif
 
+// Default provider is ANU; call configure() before first get_instance() to change.
+std::string psirngclient_manager::s_qrng_api = "anu";
+
+void psirngclient_manager::configure(const std::string & qrng_api) {
+    s_qrng_api = qrng_api;
+}
+
 psirngclient_manager& psirngclient_manager::get_instance() {
     static psirngclient_manager instance;
     return instance;
@@ -62,36 +69,61 @@ psirngclient_manager::~psirngclient_manager() {
 
 psirngclient_manager::psirngclient_manager() : initialized(false) {
     QRNG_LOG("=== psirngclient_manager constructor starting ===");
-    QRNG_LOG("Using ANU Quantum Random Numbers API (quantumnumbers.anu.edu.au)");
+
+    // Determine provider-specific settings
+    const char * env_var_name = nullptr;
+    const char * api_host     = nullptr;
+    const char * provider_label = nullptr;
+    const char * provider_url   = nullptr;
+
+    if (s_qrng_api == "qbert") {
+        env_var_name   = "QBERT_API_KEY";
+        api_host       = "qbert.cipherstone.co";
+        provider_label = "Qbert QRNG (qbert.cipherstone.co)";
+        provider_url   = nullptr;  // invite-only, no public signup URL
+    } else {
+        // Default: ANU
+        env_var_name   = "ANU_API_KEY";
+        api_host       = "api.quantumnumbers.anu.edu.au";
+        provider_label = "ANU QRNG (quantumnumbers.anu.edu.au)";
+        provider_url   = "https://quantumnumbers.anu.edu.au/";
+    }
+
+    QRNG_LOG("Using %s", provider_label);
 
     // Require API key from environment variable
-    const char* anu_api_key = std::getenv("ANU_API_KEY");
+    const char * api_key = std::getenv(env_var_name);
 
-    if (anu_api_key == nullptr || std::strlen(anu_api_key) == 0) {
+    if (api_key == nullptr || std::strlen(api_key) == 0) {
         fprintf(stderr, "\n");
-        fprintf(stderr, "[quantum-llama] ERROR: ANU_API_KEY environment variable not set\n");
+        fprintf(stderr, "[quantum-llama] ERROR: %s environment variable not set\n", env_var_name);
         fprintf(stderr, "[quantum-llama] \n");
-        fprintf(stderr, "[quantum-llama] To use quantum random sampling, you need an ANU QRNG API key.\n");
-        fprintf(stderr, "[quantum-llama] Get your FREE API key at: https://quantumnumbers.anu.edu.au/\n");
+        fprintf(stderr, "[quantum-llama] To use quantum random sampling with %s, you need an API key.\n", provider_label);
+        if (provider_url) {
+            fprintf(stderr, "[quantum-llama] Get your FREE API key at: %s\n", provider_url);
+        }
         fprintf(stderr, "[quantum-llama] \n");
         fprintf(stderr, "[quantum-llama] Then set it in your environment:\n");
-        fprintf(stderr, "[quantum-llama]   export ANU_API_KEY=\"your-api-key-here\"   (Linux/Mac)\n");
-        fprintf(stderr, "[quantum-llama]   set ANU_API_KEY=your-api-key-here         (Windows CMD)\n");
-        fprintf(stderr, "[quantum-llama]   $env:ANU_API_KEY=\"your-api-key-here\"     (PowerShell)\n");
+        fprintf(stderr, "[quantum-llama]   export %s=\"your-api-key-here\"   (Linux/Mac)\n", env_var_name);
+        fprintf(stderr, "[quantum-llama]   set %s=your-api-key-here         (Windows CMD)\n", env_var_name);
+        fprintf(stderr, "[quantum-llama]   $env:%s=\"your-api-key-here\"     (PowerShell)\n", env_var_name);
         fprintf(stderr, "\n");
         fflush(stderr);
-        throw std::runtime_error("ANU_API_KEY environment variable required for quantum sampling");
+
+        std::string msg = std::string(env_var_name) + " environment variable required for quantum sampling";
+        throw std::runtime_error(msg);
     }
 
     ANUQRNGClient::Config config;
-    config.api_key = anu_api_key;
-    QRNG_LOG("Using ANU API key from environment");
+    config.api_key  = api_key;
+    config.api_host = api_host;
+    QRNG_LOG("Using API key from %s", env_var_name);
 
-    config.timeout_ms = 30000;
+    config.timeout_ms  = 30000;
     config.max_retries = 10;
 
     try {
-        QRNG_LOG("Creating ANU QRNG client...");
+        QRNG_LOG("Creating QRNG client for %s...", provider_label);
         anu_client = std::make_unique<ANUQRNGClient>(config);
 
         QRNG_LOG("Calling initialize()...");
@@ -99,8 +131,8 @@ psirngclient_manager::psirngclient_manager() : initialized(false) {
 
         if (result == 0) {
             initialized = true;
-            QRNG_LOG("ANU QRNG initialized successfully!");
-            fprintf(stderr, "[quantum-llama] Connected to ANU QRNG - using true quantum randomness\n");
+            QRNG_LOG("QRNG initialized successfully!");
+            fprintf(stderr, "[quantum-llama] Connected to %s - using true quantum randomness\n", provider_label);
             fprintf(stderr, "[quantum-llama] Token color legend (based on mode count, expected ~80):\n");
             fprintf(stderr, "[quantum-llama]   \033[90m■ grey\033[0m - deterministic (no QRNG)\n");
             fprintf(stderr, "[quantum-llama]   \033[37m■ white\033[0m - statistically common (count < 106)\n");
@@ -109,13 +141,13 @@ psirngclient_manager::psirngclient_manager() : initialized(false) {
             fprintf(stderr, "[quantum-llama]   \033[38;5;135m■ purple\033[0m - mythic rare (count 112+)\n");
             fflush(stderr);
         } else {
-            QRNG_LOG("ANU QRNG initialization FAILED with code %d", result);
+            QRNG_LOG("QRNG initialization FAILED with code %d", result);
             anu_client.reset();
-            throw std::runtime_error("ANU QRNG initialization failed");
+            throw std::runtime_error(std::string(provider_label) + " initialization failed");
         }
-    } catch (const std::exception& e) {
-        QRNG_LOG("Exception during ANU QRNG init: %s", e.what());
+    } catch (const std::exception & e) {
+        QRNG_LOG("Exception during QRNG init: %s", e.what());
         anu_client.reset();
-        throw std::runtime_error("ANU QRNG initialization failed: " + std::string(e.what()));
+        throw std::runtime_error(std::string(provider_label) + " initialization failed: " + std::string(e.what()));
     }
 }

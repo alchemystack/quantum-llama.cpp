@@ -25,11 +25,13 @@
 class ANUQRNGClient {
 public:
     struct Config {
-        std::string api_key;           // ANU API key
+        std::string api_key;           // API key (from ANU_API_KEY or QBERT_API_KEY env var)
+        std::string api_host;          // API hostname (default: ANU)
         uint32_t timeout_ms;           // HTTP request timeout (default: 30000ms)
         uint32_t max_retries;          // Max retry attempts for ties/failures (default: 10)
 
         Config() :
+            api_host("api.quantumnumbers.anu.edu.au"),
             timeout_ms(30000),
             max_retries(10) {}
     };

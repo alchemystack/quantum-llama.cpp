@@ -186,7 +186,8 @@ struct common_params_sampling {
     std::set<llama_token>               preserved_tokens;
 
     // Quantum sampling parameters
-    // Uses ANU QRNG with mode-based sampling (most frequent byte from hex16 data)
+    // Uses ANU or Qbert QRNG with mode-based sampling (most frequent byte from hex16 data)
+    std::string quantum_qrng_api = "anu";   // QRNG API provider: "anu" or "qbert"
 
     // Adaptive entropy-based sampling
     bool    quantum_adaptive_sampling = true;  // Enable entropy-based greedy fallback
