@@ -6,6 +6,7 @@
 #include "../src/psirngclient-manager.h"
 
 #include <cmath>
+#include <cstring>
 #include <unordered_map>
 #include <algorithm>
 
