@@ -1,5 +1,6 @@
 #pragma once
 
+#include "llama.h"
 #include "anu-qrng-client.h"
 #include <memory>
 
@@ -20,7 +21,7 @@ public:
      *
      * @param qrng_api Provider name: "anu" (default) or "qbert"
      */
-    static void configure(const std::string & qrng_api);
+    LLAMA_API static void configure(const std::string & qrng_api);
 
     /**
      * Get a quantum random value for token sampling

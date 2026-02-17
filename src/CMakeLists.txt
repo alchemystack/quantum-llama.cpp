@@ -158,7 +158,7 @@ target_include_directories(llama PUBLIC ../include ../libpsirngclient/src ../lib
 target_compile_features   (llama PRIVATE cxx_std_17) # don't bump
 
 if (MSVC)
-    target_link_libraries(llama PUBLIC ggml psirngclient_static psijent)
+    target_link_libraries(llama PUBLIC ggml psirngclient_static psijent_static)
 else()
     target_link_libraries(llama PUBLIC ggml psirngclient psijent)
 endif()
