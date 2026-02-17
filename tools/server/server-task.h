@@ -385,6 +385,11 @@ struct server_task_result_cmpl_partial : server_task_result {
     result_timings timings;
     result_prompt_progress progress;
 
+    // Quantum sampling info for token coloring
+    bool    quantum_was_quantum  = false;
+    uint8_t quantum_mode         = 0;
+    size_t  quantum_mode_count   = 80;
+
     // response formatting
     bool               verbose  = false;
     task_response_type res_type = TASK_RESPONSE_TYPE_NONE;

@@ -24,6 +24,13 @@ public:
     LLAMA_API static void configure(const std::string & qrng_api);
 
     /**
+     * Eagerly trigger singleton construction to catch API issues at startup.
+     * Should be called after configure() when quantum sampling is enabled.
+     * Throws std::runtime_error if initialization fails.
+     */
+    LLAMA_API static void ensure_initialized();
+
+    /**
      * Get a quantum random value for token sampling
      *
      * @param output Pointer to store the random value (0.0 to 1.0)

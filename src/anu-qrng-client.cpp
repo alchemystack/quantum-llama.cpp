@@ -336,7 +336,24 @@ int ANUQRNGClient::http_request_hex16(std::vector<uint8_t>& uint8_values) {
     ANU_LOG("HTTP status code: %lu", statusCode);
 
     if (statusCode != 200) {
-        ANU_LOG("HTTP request failed with status %lu", statusCode);
+        // Read the error response body so the user sees what went wrong
+        std::vector<uint8_t> err_body;
+        DWORD errSize = 0, errDownloaded = 0;
+        BYTE errBuf[4096];
+        do {
+            errSize = 0;
+            if (!WinHttpQueryDataAvailable(hRequest, &errSize)) break;
+            if (errSize == 0) break;
+            DWORD toRead = (std::min)(static_cast<DWORD>(errSize), static_cast<DWORD>(sizeof(errBuf)));
+            if (!WinHttpReadData(hRequest, errBuf, toRead, &errDownloaded)) break;
+            err_body.insert(err_body.end(), errBuf, errBuf + errDownloaded);
+        } while (errSize > 0);
+
+        std::string body_str(err_body.begin(), err_body.end());
+        fprintf(stderr, "[quantum-llama] QRNG HTTP error %lu: %s\n",
+                statusCode, body_str.empty() ? "(no response body)" : body_str.c_str());
+        fflush(stderr);
+
         WinHttpCloseHandle(hRequest);
         WinHttpCloseHandle(hConnect);
         WinHttpCloseHandle(hSession);
@@ -420,6 +437,19 @@ int ANUQRNGClient::http_request_hex16(std::vector<uint8_t>& uint8_values) {
 
     if (res != CURLE_OK) {
         ANU_LOG("curl_easy_perform failed: %s", curl_easy_strerror(res));
+        fprintf(stderr, "[quantum-llama] QRNG HTTP request failed: %s\n", curl_easy_strerror(res));
+        fflush(stderr);
+        return -1;
+    }
+
+    // Check HTTP status code
+    long http_code = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+    if (http_code != 200) {
+        std::string body_str(json_response.begin(), json_response.end());
+        fprintf(stderr, "[quantum-llama] QRNG HTTP error %ld: %s\n",
+                http_code, body_str.empty() ? "(no response body)" : body_str.c_str());
+        fflush(stderr);
         return -1;
     }
 

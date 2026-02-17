@@ -313,6 +313,17 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, st
         // Configure QRNG provider before dist sampler triggers singleton init
         psirngclient_manager::configure(params.quantum_qrng_api);
 
+        // Eagerly initialize QRNG so connectivity issues are caught at startup
+        if (params.quantum_adaptive_sampling) {
+            try {
+                psirngclient_manager::ensure_initialized();
+            } catch (const std::exception & e) {
+                fprintf(stderr, "[quantum-llama] WARNING: QRNG initialization failed: %s\n", e.what());
+                fprintf(stderr, "[quantum-llama] WARNING: Generation will use pseudorandom fallback\n");
+                fflush(stderr);
+            }
+        }
+
         if (use_adaptive_p) {
             // only if user explicitly included adaptive-p sampler
             samplers.push_back(llama_sampler_init_adaptive_p(params.adaptive_target, params.adaptive_decay, params.seed));

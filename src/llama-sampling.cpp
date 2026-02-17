@@ -1182,23 +1182,28 @@ static void llama_sampler_dist_apply(struct llama_sampler * smpl, llama_token_da
     double rnd;
     int rand_result = psirngclient_manager::get_random_value(&rnd);
     if (rand_result != 0) {
-        GGML_ABORT("%s: quantum random value error: %d", __func__, rand_result);
+        // QRNG API not responding — fall back to pseudorandom for this token
+        fprintf(stderr, "[quantum-llama] WARNING: QRNG API not responding, using pseudorandom fallback\n");
+        fflush(stderr);
+        std::uniform_real_distribution<double> dist(0.0, 1.0);
+        rnd = dist(ctx->rng);
+        ctx->last_was_quantum = false;
+    } else {
+        // Store mode value and count for token coloring
+        ctx->last_was_quantum = true;
+        ctx->last_mode = psirngclient_manager::get_last_mode();
+        ctx->last_mode_count = psirngclient_manager::get_last_mode_count();
+
+        if (ctx->verbose) {
+            const char * rarity = (ctx->last_mode_count < 106) ? "common" :
+                                  (ctx->last_mode_count <= 108) ? "above_avg" :
+                                  (ctx->last_mode_count <= 111) ? "rare" : "MYTHIC";
+            LLAMA_LOG_INFO("%s: QRNG mode=%u count=%zu (%s)\n",
+                          __func__, ctx->last_mode, ctx->last_mode_count, rarity);
+        }
     }
 
-    // Store mode value and count for token coloring
-    ctx->last_was_quantum = true;
-    ctx->last_mode = psirngclient_manager::get_last_mode();
-    ctx->last_mode_count = psirngclient_manager::get_last_mode_count();
-
-    if (ctx->verbose) {
-        const char * rarity = (ctx->last_mode_count < 106) ? "common" :
-                              (ctx->last_mode_count <= 108) ? "above_avg" :
-                              (ctx->last_mode_count <= 111) ? "rare" : "MYTHIC";
-        LLAMA_LOG_INFO("%s: QRNG mode=%u count=%zu (%s)\n",
-                      __func__, ctx->last_mode, ctx->last_mode_count, rarity);
-    }
-
-    // Sample using quantum random value (inverse CDF)
+    // Sample using random value (inverse CDF)
     double sum_run = 0.0;
     for (size_t i = 0; i < cur_p->size; ++i) {
         sum_run += cur_p->data[i].p;
@@ -1241,6 +1246,14 @@ static bool llama_sampler_dist_backend_init(
         struct llama_sampler       * smpl,
         ggml_backend_buffer_type_t   buft) {
     auto * sctx = (llama_sampler_dist *) smpl->ctx;
+
+    // When quantum adaptive sampling is enabled, force the CPU path so that
+    // llama_sampler_dist_apply (which contains the QRNG integration) is used
+    // instead of the GPU-accelerated llama_sampler_dist_backend_apply.
+    if (sctx->adaptive_sampling) {
+        LLAMA_LOG_INFO("[quantum-llama] Using CPU sampling path for QRNG integration\n");
+        return false;
+    }
 
     // allocate inputs
     {

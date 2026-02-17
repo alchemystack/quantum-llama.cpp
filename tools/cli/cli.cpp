@@ -114,7 +114,21 @@ struct cli_context {
                             is_thinking = false;
                         }
                         curr_content += diff.content_delta;
-                        console::log("%s", diff.content_delta.c_str());
+
+                        // Quantum token color coding based on QRNG mode count rarity
+                        const char * color_code;
+                        if (!res_partial->quantum_was_quantum) {
+                            color_code = "\033[90m";           // grey: greedy/deterministic
+                        } else if (res_partial->quantum_mode_count < 106) {
+                            color_code = "\033[37m";           // white: statistically common
+                        } else if (res_partial->quantum_mode_count <= 108) {
+                            color_code = "\033[38;5;218m";     // pink: above average
+                        } else if (res_partial->quantum_mode_count <= 111) {
+                            color_code = "\033[31m";           // red: rare
+                        } else {
+                            color_code = "\033[1;38;5;135m";   // purple: mythic rare
+                        }
+                        console::log("%s%s\033[0m", color_code, diff.content_delta.c_str());
                         console::flush();
                     }
                     if (!diff.reasoning_content_delta.empty()) {

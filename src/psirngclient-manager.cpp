@@ -20,6 +20,13 @@ void psirngclient_manager::configure(const std::string & qrng_api) {
     s_qrng_api = qrng_api;
 }
 
+void psirngclient_manager::ensure_initialized() {
+    // Force the lazy singleton to construct now, triggering the API connectivity
+    // check at startup rather than on the first token.  The constructor throws
+    // std::runtime_error on failure, which the caller can catch.
+    get_instance();
+}
+
 psirngclient_manager& psirngclient_manager::get_instance() {
     static psirngclient_manager instance;
     return instance;
