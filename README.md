@@ -77,14 +77,26 @@ cmake --build build --config Release
 ```
 
 3. Set your API key and run:
+Widows
+```bash
+# ANU (default)
+set ANU_API_KEY="your-key"
+./build/bin/llama-cli -m model.gguf -p "prompt"
+
+# Qbert
+set QBERT_API_KEY="your-key"
+./build/bin/llama-cli -m model.gguf -p "prompt" --qrng-api qbert
+```
+
+Linux/Mac
 ```bash
 # ANU (default)
 export ANU_API_KEY="your-key"
-./build/bin/llama-cli -m model.gguf -p "prompt" -n 128 -no-cnv
+./build/bin/llama-cli -m model.gguf -p "prompt"
 
 # Qbert
 export QBERT_API_KEY="your-key"
-./build/bin/llama-cli -m model.gguf -p "prompt" -n 128 -no-cnv --qrng-api qbert
+./build/bin/llama-cli -m model.gguf -p "prompt" --qrng-api qbert
 ```
 
 ## CLI Arguments
