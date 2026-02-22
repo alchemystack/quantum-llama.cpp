@@ -21,6 +21,7 @@ If you are blocked and need user clarification, mark the current step with `[!]`
 ## Workflow Steps
 
 ### [x] Step: Technical Specification
+<!-- chat-id: c98714e5-8518-4615-8645-f97d437ffd96 -->
 
 Difficulty: **Hard**. Full specification saved to `.zenflow/tasks/z-score-c519/spec.md`.
 
@@ -29,6 +30,7 @@ Replace mode-based signal amplification with z-score-based quantum consciousness
 ---
 
 ### [ ] Step 1: Core Algorithm Change (QRNG client + manager + sampling engine)
+<!-- chat-id: 43cba7e7-57e4-4b96-91ac-ed0b9512627a -->
 
 Modify the QRNG data pipeline from mode-based to z-score-based:
 
