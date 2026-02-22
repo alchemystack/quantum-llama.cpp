@@ -20,50 +20,56 @@ If you are blocked and need user clarification, mark the current step with `[!]`
 
 ## Workflow Steps
 
-### [ ] Step: Technical Specification
+### [x] Step: Technical Specification
 
-Assess the task's difficulty, as underestimating it leads to poor outcomes.
-- easy: Straightforward implementation, trivial bug fix or feature
-- medium: Moderate complexity, some edge cases or caveats to consider
-- hard: Complex logic, many caveats, architectural considerations, or high-risk changes
+Difficulty: **Hard**. Full specification saved to `.zenflow/tasks/z-score-c519/spec.md`.
 
-Create a technical specification for the task that is appropriate for the complexity level:
-- Review the existing codebase architecture and identify reusable components.
-- Define the implementation approach based on established patterns in the project.
-- Identify all source code files that will be created or modified.
-- Define any necessary data model, API, or interface changes.
-- Describe verification steps using the project's test and lint commands.
-
-Save the output to `{@artifacts_path}/spec.md` with:
-- Technical context (language, dependencies)
-- Implementation approach
-- Source code structure changes
-- Data model / API / interface changes
-- Verification approach
-
-If the task is complex enough, create a detailed implementation plan based on `{@artifacts_path}/spec.md`:
-- Break down the work into concrete tasks (incrementable, testable milestones)
-- Each task should reference relevant contracts and include verification steps
-- Replace the Implementation step below with the planned tasks
-
-Rule of thumb for step size: each step should represent a coherent unit of work (e.g., implement a component, add an API endpoint, write tests for a module). Avoid steps that are too granular (single function).
-
-Important: unit tests must be part of each implementation task, not separate tasks. Each task should implement the code and its tests together, if relevant.
-
-Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warrant this breakdown, keep the Implementation step below as is.
+Replace mode-based signal amplification with z-score-based quantum consciousness sampling across 11 files. Key changes: compute sample mean of 20,480 QRNG bytes, derive z-score, map through normal CDF to uniform float, build probability-ordered descending CDF for token selection, and replace mode-count color coding with z-score-magnitude color coding.
 
 ---
 
-### [ ] Step: Implementation
+### [ ] Step 1: Core Algorithm Change (QRNG client + manager + sampling engine)
 
-Implement the task according to the technical specification and general engineering best practices.
+Modify the QRNG data pipeline from mode-based to z-score-based:
 
-1. Break the task into steps where possible.
-2. Implement the required changes in the codebase
-3. If relevant, write unit tests alongside each change.
-4. Run relevant tests and linters in the end of each step.
-5. Perform basic manual verification if applicable.
-6. After completion, write a report to `{@artifacts_path}/report.md` describing:
-   - What was implemented
-   - How the solution was tested
-   - The biggest issues or challenges encountered
+- `src/anu-qrng-client.h` / `.cpp`:
+  - Remove `find_mode()`, `fetch_and_find_mode()`, `last_mode`, `last_mode_count`, `get_last_mode()`, `get_last_mode_count()`
+  - Remove `tie_retries` from Statistics
+  - Add `last_z_score` (double, default 0.0) and `get_last_z_score()` accessor
+  - Add `fetch_and_compute_zscore(double * z_out)`: compute mean, z-score, normal CDF, clamp
+  - Update `get_random_value()` to call new method
+- `src/psirngclient-manager.h` / `.cpp`:
+  - Replace `get_last_mode()` / `get_last_mode_count()` with `get_last_z_score()`
+  - Update startup color legend to z-score-based colors
+- `src/llama-sampling.h`:
+  - Change `llama_sampler_dist_get_last_info` signature: `(smpl, double * z_score_out)`
+- `src/llama-sampling.cpp`:
+  - Replace `last_mode`/`last_mode_count` with `last_z_score` in struct and init
+  - After QRNG call: store z-score, update verbose logging
+  - Implement descending-probability CDF sampling (sort tokens by prob desc, build CDF, select via u)
+  - Update `llama_sampler_dist_get_last_info()` implementation
+
+### [ ] Step 2: Propagation Layer + Color Coding (common + tools)
+
+Update all consumers of quantum metadata:
+
+- `common/sampling.h` / `.cpp`:
+  - Rename `common_sampler_get_last_quantum_mode()` to `common_sampler_get_last_quantum_info()`
+  - New signature: `bool common_sampler_get_last_quantum_info(const common_sampler *, double * z_score_out)`
+- `tools/server/server-task.h`:
+  - Replace `quantum_mode` (uint8_t) and `quantum_mode_count` (size_t) with `quantum_z_score` (double)
+- `tools/server/server-context.cpp`:
+  - Update population code to use `common_sampler_get_last_quantum_info()`
+- `tools/cli/cli.cpp`:
+  - Replace mode-count color logic with z-score color logic:
+    - greedy → grey, |z|<1 → white, z in [-2,-1) → light blue, z<-2 → blue, z in (1,2] → pink, z>2 → red
+- `tools/completion/completion.cpp`:
+  - Same z-score color mapping as cli.cpp
+
+### [ ] Step 3: Documentation + Build Verification
+
+- Update `README.md`: color table, algorithm description
+- Update `CLAUDE.md`: quantum RNG flow, color legend
+- Build: `cmake -B build -DLLAMA_CURL=OFF && cmake --build build --config Release -j`
+- Test: `ctest --test-dir build --output-on-failure -j`
+- Write report to `.zenflow/tasks/z-score-c519/report.md`
