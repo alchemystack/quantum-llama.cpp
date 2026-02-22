@@ -53,20 +53,12 @@ ANUQRNGClient* psirngclient_manager::get_anu_client() {
     return manager.anu_client.get();
 }
 
-uint8_t psirngclient_manager::get_last_mode() {
+double psirngclient_manager::get_last_z_score() {
     auto& manager = get_instance();
     if (manager.anu_client) {
-        return manager.anu_client->get_last_mode();
+        return manager.anu_client->get_last_z_score();
     }
-    return 128;  // Default midpoint if not initialized
-}
-
-size_t psirngclient_manager::get_last_mode_count() {
-    auto& manager = get_instance();
-    if (manager.anu_client) {
-        return manager.anu_client->get_last_mode_count();
-    }
-    return 80;  // Expected average if not initialized
+    return 0.0;  // Neutral z-score if not initialized
 }
 
 psirngclient_manager::~psirngclient_manager() {
@@ -140,12 +132,13 @@ psirngclient_manager::psirngclient_manager() : initialized(false) {
             initialized = true;
             QRNG_LOG("QRNG initialized successfully!");
             fprintf(stderr, "[quantum-llama] Connected to %s - using true quantum randomness\n", provider_label);
-            fprintf(stderr, "[quantum-llama] Token color legend (based on mode count, expected ~80):\n");
+            fprintf(stderr, "[quantum-llama] Token color legend (based on z-score magnitude):\n");
             fprintf(stderr, "[quantum-llama]   \033[90m■ grey\033[0m - deterministic (no QRNG)\n");
-            fprintf(stderr, "[quantum-llama]   \033[37m■ white\033[0m - statistically common (count < 106)\n");
-            fprintf(stderr, "[quantum-llama]   \033[38;5;218m■ pink\033[0m - above average frequency (count 106-108)\n");
-            fprintf(stderr, "[quantum-llama]   \033[31m■ red\033[0m - rare (count 109-111)\n");
-            fprintf(stderr, "[quantum-llama]   \033[38;5;135m■ purple\033[0m - mythic rare (count 112+)\n");
+            fprintf(stderr, "[quantum-llama]   \033[37m■ white\033[0m - near expected mean (|z| < 1)\n");
+            fprintf(stderr, "[quantum-llama]   \033[94m■ light blue\033[0m - mild negative shift (z in [-2, -1))\n");
+            fprintf(stderr, "[quantum-llama]   \033[34m■ blue\033[0m - strong negative shift (z < -2)\n");
+            fprintf(stderr, "[quantum-llama]   \033[38;5;218m■ pink\033[0m - mild positive shift (z in (1, 2])\n");
+            fprintf(stderr, "[quantum-llama]   \033[31m■ red\033[0m - strong positive shift (z > 2)\n");
             fflush(stderr);
         } else {
             QRNG_LOG("QRNG initialization FAILED with code %d", result);

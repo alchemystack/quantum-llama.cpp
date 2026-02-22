@@ -6,7 +6,8 @@
 #include <thread>
 #include <chrono>
 #include <cstdio>
-#include <array>
+#include <cmath>
+#include <numeric>
 
 // Platform-specific HTTP client
 #ifdef _WIN32
@@ -68,94 +69,58 @@ int ANUQRNGClient::get_random_value(double* output) {
         return -1;
     }
 
-    uint8_t mode_value;
-    int result = fetch_and_find_mode(&mode_value);
+    int result = fetch_and_compute_zscore(output);
 
     if (result != 0) {
         return -1;
     }
 
-    // Store mode value for color-coding
-    last_mode = mode_value;
-
-    // Convert uint8 mode to double in [0, 1)
-    *output = static_cast<double>(mode_value) / 256.0;
-
     stats.total_samples++;
-    ANU_LOG("Quantum random value: mode=%u, output=%.6f", mode_value, *output);
+    ANU_LOG("Quantum random value: z=%.4f, u=%.6f", last_z_score, *output);
 
     return 0;
 }
 
-int ANUQRNGClient::fetch_and_find_mode(uint8_t* mode_out) {
-    // Try up to max_retries times in case of ties
-    for (uint32_t attempt = 0; attempt < config.max_retries; ++attempt) {
-        std::vector<uint8_t> uint8_values;
-        int result = http_request_hex16(uint8_values);
+// Z-score constants for uniform distribution on [0, 255]
+static constexpr double QRNG_POPULATION_MEAN   = 127.5;                      // (0 + 255) / 2
+static constexpr double QRNG_STD_ERROR_OF_MEAN = 0.51433;                    // sigma / sqrt(20480)
+static constexpr double QRNG_U_CLAMP_LO        = 1e-10;
+static constexpr double QRNG_U_CLAMP_HI        = 1.0 - 1e-10;
 
-        if (result != 0 || uint8_values.empty()) {
-            stats.failed_requests++;
-            ANU_LOG("HTTP request failed (attempt %u)", attempt + 1);
-            std::this_thread::sleep_for(std::chrono::milliseconds(100 * (1 << attempt)));
-            continue;
-        }
+int ANUQRNGClient::fetch_and_compute_zscore(double* u_out) {
+    // No retry loop needed — z-score is continuous, no tie problem
+    std::vector<uint8_t> uint8_values;
+    int result = http_request_hex16(uint8_values);
 
-        // Find mode and count
-        size_t mode_count = 0;
-        if (find_mode(uint8_values, mode_out, &mode_count)) {
-            last_mode_count = mode_count;  // Store the count for later retrieval
-            ANU_LOG("Found unique mode: %u with count %zu (from %zu values)", *mode_out, mode_count, uint8_values.size());
-            return 0;
-        }
-
-        // Tie detected - retry
-        stats.tie_retries++;
-        ANU_LOG("Mode tie detected (attempt %u), retrying...", attempt + 1);
+    if (result != 0 || uint8_values.empty()) {
+        stats.failed_requests++;
+        ANU_LOG("HTTP request failed");
+        return -1;
     }
 
-    ANU_LOG("Failed to find unique mode after %u attempts", config.max_retries);
-    return -1;
-}
-
-bool ANUQRNGClient::find_mode(const std::vector<uint8_t>& values, uint8_t* mode_out, size_t* count_out) {
-    if (values.empty()) {
-        return false;
+    // Compute sample mean
+    double sum = 0.0;
+    for (uint8_t val : uint8_values) {
+        sum += static_cast<double>(val);
     }
+    double sample_mean = sum / static_cast<double>(uint8_values.size());
 
-    // Count occurrences of each byte value
-    std::array<size_t, 256> counts = {};
-    for (uint8_t val : values) {
-        counts[val]++;
-    }
+    // Compute z-score
+    double z = (sample_mean - QRNG_POPULATION_MEAN) / QRNG_STD_ERROR_OF_MEAN;
 
-    // Find maximum count
-    size_t max_count = 0;
-    for (size_t i = 0; i < 256; ++i) {
-        if (counts[i] > max_count) {
-            max_count = counts[i];
-        }
-    }
+    // Store z-score for later retrieval (color coding, verbose output)
+    last_z_score = z;
 
-    // Check for ties and find the mode
-    uint8_t mode = 0;
-    size_t num_with_max = 0;
-    for (size_t i = 0; i < 256; ++i) {
-        if (counts[i] == max_count) {
-            mode = static_cast<uint8_t>(i);
-            num_with_max++;
-        }
-    }
+    // Convert to uniform via normal CDF: u = Phi(z) = 0.5 * (1 + erf(z / sqrt(2)))
+    double u = 0.5 * (1.0 + std::erf(z / std::sqrt(2.0)));
 
-    if (num_with_max > 1) {
-        ANU_LOG("Tie detected: %zu values have count %zu", num_with_max, max_count);
-        return false;  // Tie - caller should retry
-    }
+    // Clamp to avoid degenerate edge values
+    u = std::max(QRNG_U_CLAMP_LO, std::min(QRNG_U_CLAMP_HI, u));
 
-    *mode_out = mode;
-    if (count_out) {
-        *count_out = max_count;
-    }
-    return true;
+    *u_out = u;
+    ANU_LOG("Z-score: mean=%.4f, z=%.4f, u=%.6f (from %zu values)",
+            sample_mean, z, u, uint8_values.size());
+    return 0;
 }
 
 // Parse hex16 JSON response

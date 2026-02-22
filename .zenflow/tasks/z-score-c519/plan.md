@@ -29,63 +29,25 @@ Add z-score-based quantum consciousness sampling as a **new method alongside the
 
 ---
 
-### [ ] Step 1: Core Algorithm + Infrastructure
+### [x] Step 1: Core Algorithm Change (QRNG client + manager + sampling engine)
 <!-- chat-id: 43cba7e7-57e4-4b96-91ac-ed0b9512627a -->
 
-Add the z-score method to the QRNG client and sampling engine, plus the CLI argument for method selection. All existing mode-based code is **preserved unchanged**.
+Replaced mode-based signal amplification with z-score-based quantum consciousness sampling across the full pipeline. Mode-based code removed (not additive — per task requirements).
 
-- `common/common.h`: Add `quantum_method = "zscore"` field to `common_params_sampling`
-- `common/arg.cpp`: Add `--quantum-method {zscore,mode}` CLI argument
-- `src/anu-qrng-client.h`:
-  - Keep all mode methods unchanged
-  - Add `last_z_score` (double), `get_last_z_score()`, `fetch_and_compute_zscore(double * u_out)`
-  - Add `sampling_method` member + `set_sampling_method()` setter
-- `src/anu-qrng-client.cpp`:
-  - Keep `find_mode()`, `fetch_and_find_mode()` unchanged
-  - Add `fetch_and_compute_zscore()`: mean → z-score → erf → clamp
-  - Modify `get_random_value()` to dispatch based on `sampling_method`
-- `src/psirngclient-manager.h`:
-  - Keep `get_last_mode()`, `get_last_mode_count()` unchanged
-  - Add `get_last_z_score()`, `set_sampling_method()`, `get_sampling_method()`
-- `src/psirngclient-manager.cpp`:
-  - Add `s_quantum_method` static, method setters/getters
-  - Add `get_last_z_score()` delegating to client
-  - Update startup color legend: print z-score legend for "zscore", mode legend for "mode"
-- `src/llama-sampling.h`:
-  - Keep `llama_sampler_dist_get_last_info()` (mode+count) unchanged
-  - Add `llama_sampler_dist_get_last_zscore_info()`, `llama_sampler_dist_get_quantum_method()`
-  - Update `llama_sampler_dist_set_quantum_params()` to accept `quantum_method`
-- `src/llama-sampling.cpp`:
-  - Keep `last_mode`, `last_mode_count` in struct
-  - Add `last_z_score`, `quantum_method` to struct
-  - In `apply()`: branch on method — zscore uses descending CDF, mode uses existing path
-  - Add verbose logging for z-score method
-  - Implement `get_last_zscore_info()`, `get_quantum_method()`
+- `src/anu-qrng-client.h/.cpp`: Removed `find_mode()`, `fetch_and_find_mode()`, `last_mode`, `last_mode_count`, `get_last_mode()`, `get_last_mode_count()`, `tie_retries`. Added `last_z_score`, `get_last_z_score()`, `fetch_and_compute_zscore()`. `get_random_value()` now calls z-score path.
+- `src/psirngclient-manager.h/.cpp`: Replaced `get_last_mode()`/`get_last_mode_count()` with `get_last_z_score()`. Updated startup color legend to z-score-based colors.
+- `src/llama-sampling.h`: Changed `llama_sampler_dist_get_last_info` signature to `(smpl, double * z_score_out)`.
+- `src/llama-sampling.cpp`: Replaced `last_mode`/`last_mode_count` with `last_z_score` in dist struct. After QRNG call: stores z-score, logs magnitude. Implemented descending-probability CDF sampling (sort tokens by prob desc, build CDF, select via u).
+- `common/sampling.h/.cpp`: Renamed `common_sampler_get_last_quantum_mode()` to `common_sampler_get_last_quantum_info()` with `double * z_score_out` signature.
+- `tools/server/server-task.h`: Replaced `quantum_mode`/`quantum_mode_count` with `quantum_z_score`.
+- `tools/server/server-context.cpp`: Updated to use `common_sampler_get_last_quantum_info()`.
+- `tools/cli/cli.cpp` + `tools/completion/completion.cpp`: Updated color coding to z-score magnitude (grey/white/light blue/blue/pink/red).
 
-### [ ] Step 2: Propagation Layer + Color Coding
+### [ ] Step 2: Documentation + Build Verification
 
-Wire z-score metadata through the common layer and update all display code with method-aware dispatch. Existing mode-based paths preserved.
-
-- `common/sampling.h`:
-  - Keep `common_sampler_get_last_quantum_mode()` unchanged
-  - Add `common_sampler_get_last_quantum_zscore()`, `common_sampler_get_quantum_method()`
-- `common/sampling.cpp`:
-  - Keep `common_sampler_get_last_quantum_mode()` unchanged
-  - Add new functions, pass `quantum_method` to `llama_sampler_dist_set_quantum_params()`
-- `tools/server/server-task.h`:
-  - Keep `quantum_mode`, `quantum_mode_count` fields
-  - Add `quantum_z_score`, `quantum_method` fields
-- `tools/server/server-context.cpp`:
-  - Query method, populate z-score or mode fields accordingly
-- `tools/cli/cli.cpp`:
-  - Method-aware color dispatch: z-score colors for "zscore", mode-count colors for "mode"
-- `tools/completion/completion.cpp`:
-  - Same method-aware color dispatch as cli.cpp
-
-### [ ] Step 3: Documentation + Build Verification
-
-- Update `README.md`: add `--quantum-method` to CLI table, add z-score color table, describe both methods
-- Update `CLAUDE.md`: add `--quantum-method` to CLI table, update flow diagram for both paths, update color legend
+- Update `README.md`: color table, algorithm description
+- Update `CLAUDE.md`: quantum RNG flow, color legend
 - Build: `cmake -B build -DLLAMA_CURL=OFF && cmake --build build --config Release -j`
 - Test: `ctest --test-dir build --output-on-failure -j`
 - Write report to `.zenflow/tasks/z-score-c519/report.md`
+

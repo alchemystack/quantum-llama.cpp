@@ -14,12 +14,14 @@
  * IMPORTANT: Never buffers quantum data. Each call makes a fresh API request
  * to preserve temporal correlation between consciousness and token selection.
  *
- * Algorithm:
+ * Algorithm (z-score based):
  * 1. Fetch hex16 data from ANU API (length=1024, size=10)
  * 2. Convert hex16 values to binary, split into 8-bit chunks (uint8)
- * 3. Find the mode (most frequent byte value 0-255)
- * 4. If there's a tie, repeat API call until single winner
- * 5. Return mode value for use in sampling
+ * 3. Compute sample mean of all ~20,480 bytes
+ * 4. Compute z-score: z = (mean - 127.5) / 0.51433
+ * 5. Map through normal CDF: u = Phi(z)
+ * 6. Clamp u to (1e-10, 1 - 1e-10)
+ * 7. Return u for use in sampling
  */
 
 class ANUQRNGClient {
@@ -28,7 +30,7 @@ public:
         std::string api_key;           // API key (from ANU_API_KEY or QBERT_API_KEY env var)
         std::string api_host;          // API hostname (default: ANU)
         uint32_t timeout_ms;           // HTTP request timeout (default: 30000ms)
-        uint32_t max_retries;          // Max retry attempts for ties/failures (default: 10)
+        uint32_t max_retries;          // Max retry attempts for failures (default: 10)
 
         Config() :
             api_host("api.quantumnumbers.anu.edu.au"),
@@ -55,8 +57,8 @@ public:
      * Get a quantum random value for token sampling
      *
      * Makes a fresh HTTP request to ANU API (no buffering).
-     * Returns the mode (most frequent byte value) from the quantum data.
-     * Automatically retries if there's a tie for most frequent value.
+     * Computes z-score from 20,480 byte sample mean, maps through
+     * normal CDF to get uniform float in (0, 1).
      *
      * @param output Pointer to store the random value (0.0 to 1.0)
      * @return 0 on success, -1 on failure
@@ -69,38 +71,31 @@ public:
     struct Statistics {
         size_t total_requests;           // HTTP requests made
         size_t failed_requests;          // Failed requests
-        size_t tie_retries;              // Retries due to mode ties
         size_t total_samples;            // Successful samples returned
 
         Statistics() : total_requests(0), failed_requests(0),
-                      tie_retries(0), total_samples(0) {}
+                      total_samples(0) {}
     };
 
     const Statistics& get_statistics() const;
     void reset_statistics();
 
     /**
-     * Get the mode value (0-255) from the last QRNG sample
+     * Get the z-score from the last QRNG sample
+     * z = (sample_mean - 127.5) / 0.51433
+     * |z| < 1 is typical, |z| > 2 is notable
      */
-    uint8_t get_last_mode() const { return last_mode; }
-
-    /**
-     * Get the mode count (appearances) from the last QRNG sample
-     * Expected value is ~80 (20480 bytes / 256 values)
-     * Higher counts indicate statistical anomalies
-     */
-    size_t get_last_mode_count() const { return last_mode_count; }
+    double get_last_z_score() const { return last_z_score; }
 
 private:
     Config config;
     Statistics stats;
     mutable std::mutex mutex;
     bool initialized;
-    uint8_t last_mode = 128;       // Last mode value from QRNG (0-255)
-    size_t last_mode_count = 80;   // How many times the mode appeared (expected ~80)
+    double last_z_score = 0.0;         // Last z-score from QRNG sample
 
-    // Fetch hex16 data and find mode
-    int fetch_and_find_mode(uint8_t* mode_out);
+    // Fetch hex16 data and compute z-score, returning uniform value via u_out
+    int fetch_and_compute_zscore(double* u_out);
 
     // HTTP request to ANU API
     int http_request_hex16(std::vector<uint8_t>& uint8_values);
@@ -108,8 +103,4 @@ private:
     // Parse hex16 JSON response into uint8 values
     static bool parse_hex16_response(const std::vector<uint8_t>& json_data,
                                      std::vector<uint8_t>& uint8_values);
-
-    // Find mode (most frequent value) - returns false if tie
-    // count_out receives the number of times the mode appeared
-    static bool find_mode(const std::vector<uint8_t>& values, uint8_t* mode_out, size_t* count_out);
 };

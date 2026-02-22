@@ -387,8 +387,7 @@ struct server_task_result_cmpl_partial : server_task_result {
 
     // Quantum sampling info for token coloring
     bool    quantum_was_quantum  = false;
-    uint8_t quantum_mode         = 0;
-    size_t  quantum_mode_count   = 80;
+    double  quantum_z_score      = 0.0;
 
     // response formatting
     bool               verbose  = false;

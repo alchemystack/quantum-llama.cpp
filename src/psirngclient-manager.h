@@ -49,16 +49,10 @@ public:
     static ANUQRNGClient* get_anu_client();
 
     /**
-     * Get the mode value (0-255) from the last QRNG sample
+     * Get the z-score from the last QRNG sample
+     * z = (sample_mean - 127.5) / 0.51433
      */
-    static uint8_t get_last_mode();
-
-    /**
-     * Get the mode count (appearances) from the last QRNG sample
-     * Expected value is ~80 (20480 bytes / 256 values)
-     * Higher counts indicate statistical anomalies
-     */
-    static size_t get_last_mode_count();
+    static double get_last_z_score();
 
     ~psirngclient_manager();
 

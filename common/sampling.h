@@ -105,9 +105,8 @@ std::string common_sampler_prev_str(common_sampler * gsmpl, llama_context * ctx,
 
 // Get last quantum sampling info for token coloring
 // Returns true if last sample was quantum (vs greedy)
-// mode_out receives the mode value (0-255) from QRNG
-// count_out receives how many times the mode appeared (expected ~80)
-bool common_sampler_get_last_quantum_mode(const struct common_sampler * gsmpl, uint8_t * mode_out, size_t * count_out);
+// z_score_out receives the z-score from the last QRNG sample
+bool common_sampler_get_last_quantum_info(const struct common_sampler * gsmpl, double * z_score_out);
 
 char        common_sampler_type_to_chr(enum common_sampler_type cnstr);
 std::string common_sampler_type_to_str(enum common_sampler_type cnstr);

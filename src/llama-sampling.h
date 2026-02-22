@@ -66,6 +66,5 @@ LLAMA_API bool llama_sampler_dist_should_print_stats(const struct llama_sampler 
 
 // Get last sample info for token coloring
 // Returns true if last sample was quantum, false if greedy
-// mode_out receives the mode value (0-255)
-// count_out receives how many times the mode appeared (expected ~80)
-LLAMA_API bool llama_sampler_dist_get_last_info(const struct llama_sampler * smpl, uint8_t * mode_out, size_t * count_out);
+// z_score_out receives the z-score from the last QRNG sample
+LLAMA_API bool llama_sampler_dist_get_last_info(const struct llama_sampler * smpl, double * z_score_out);
