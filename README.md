@@ -12,11 +12,13 @@ This project treats that hypothesis seriously enough to build proper infrastruct
 
 ## Technical Approach
 
-### Mode-Based Signal Extraction
+### Z-Score Signal Amplification
 
 Raw QRNG output contains both quantum signal and classical noise (thermal effects, detector bias). Simple truncation or hashing destroys potential consciousness influence by making arbitrary outputs impossible to achieve through bit manipulation.
 
-Our approach: fetch 20,480 bytes from the QRNG provider's hex16 endpoint, find the statistical mode (most frequent byte value), use that single value for sampling. This preserves the ability to "select" any output (0-255) while amplifying weak signals through statistical redundancy. Ties trigger a fresh API call.
+Our approach: fetch 20,480 bytes from the QRNG provider's hex16 endpoint, compute the sample mean, convert to a z-score against the known population distribution (μ=127.5, σ_m=0.51433), and map through the standard normal CDF to produce a uniform float in [0, 1). This leverages the Central Limit Theorem: even a sub-0.2% per-sample bias produces a detectable shift in the aggregate mean, which the z-score → CDF pipeline converts into a meaningful change in token selection probability.
+
+Token selection uses a **probability-ordered descending CDF**: tokens are sorted from most probable to least probable, so higher values of the uniform float select increasingly surprising tokens. This gives the consciousness influence lever a coherent direction.
 
 ### Adaptive Entropy-Based Sampling
 
@@ -32,17 +34,18 @@ This reduces API calls by 50-80% while focusing quantum randomness where it matt
 
 ### Token Color-Coding
 
-Generated tokens are color-coded based on the mode frequency detected in the QRNG data. Higher mode counts represent statistical anomalies that may correlate with consciousness influence:
+Generated tokens are color-coded based on the z-score magnitude from the QRNG data. The z-score measures how far the sample mean deviates from the expected population mean in units of standard error. Larger deviations represent increasingly improbable statistical events that may correlate with consciousness influence:
 
-| Color | Mode Count | Meaning |
-|-------|------------|---------|
+| Color | Z-Score Range | Meaning |
+|-------|---------------|---------|
 | Grey | N/A | Deterministic (greedy, no QRNG) |
-| White | < 106 | Statistically common |
-| Pink | 106-108 | Above average frequency |
-| Red | 109-111 | Rare |
-| Purple | 112+ | Mythic rare |
+| White | \|z\| < 1.0 | Near expected mean |
+| Light Blue | z ∈ [-2, -1) | Mild negative shift (more conventional) |
+| Blue | z < -2 | Strong negative shift |
+| Pink | z ∈ (1, 2] | Mild positive shift (more surprising) |
+| Red | z > 2 | Strong positive shift |
 
-The expected mode count is ~80 (20,480 bytes / 256 possible values). Values above 106 represent increasingly improbable statistical events.
+Positive z-scores push token selection toward less probable (more surprising) tokens. Negative z-scores push toward more probable (more conventional) tokens.
 
 ### EDT Temperature Scaling
 
