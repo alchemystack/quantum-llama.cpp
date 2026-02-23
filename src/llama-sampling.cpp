@@ -1059,8 +1059,7 @@ struct llama_sampler_dist : public llama_sampler_backend {
     size_t quantum_samples;
 
     // Last sample info for token coloring
-    uint8_t last_mode;          // Mode value (0-255) from last QRNG sample
-    size_t  last_mode_count;    // How many times the mode appeared (expected ~80)
+    double  last_z_score;       // Z-score from last QRNG sample
     bool    last_was_quantum;   // Was the last sample from QRNG (vs greedy)?
 
     // backend input
@@ -1179,42 +1178,65 @@ static void llama_sampler_dist_apply(struct llama_sampler * smpl, llama_token_da
     }
 
     // Get quantum random value for sampling (fresh API call each time)
-    double rnd;
-    int rand_result = psirngclient_manager::get_random_value(&rnd);
+    double u;
+    int rand_result = psirngclient_manager::get_random_value(&u);
     if (rand_result != 0) {
         // QRNG API not responding — fall back to pseudorandom for this token
         fprintf(stderr, "[quantum-llama] WARNING: QRNG API not responding, using pseudorandom fallback\n");
         fflush(stderr);
         std::uniform_real_distribution<double> dist(0.0, 1.0);
-        rnd = dist(ctx->rng);
+        u = dist(ctx->rng);
         ctx->last_was_quantum = false;
     } else {
-        // Store mode value and count for token coloring
+        // Store z-score for token coloring
         ctx->last_was_quantum = true;
-        ctx->last_mode = psirngclient_manager::get_last_mode();
-        ctx->last_mode_count = psirngclient_manager::get_last_mode_count();
+        ctx->last_z_score = psirngclient_manager::get_last_z_score();
 
         if (ctx->verbose) {
-            const char * rarity = (ctx->last_mode_count < 106) ? "common" :
-                                  (ctx->last_mode_count <= 108) ? "above_avg" :
-                                  (ctx->last_mode_count <= 111) ? "rare" : "MYTHIC";
-            LLAMA_LOG_INFO("%s: QRNG mode=%u count=%zu (%s)\n",
-                          __func__, ctx->last_mode, ctx->last_mode_count, rarity);
+            const char * magnitude = (std::fabs(ctx->last_z_score) < 1.0) ? "normal" :
+                                     (std::fabs(ctx->last_z_score) <= 2.0) ? "notable" : "STRONG";
+            LLAMA_LOG_INFO("%s: QRNG z=%.4f u=%.6f (%s)\n",
+                          __func__, ctx->last_z_score, u, magnitude);
         }
     }
 
-    // Sample using random value (inverse CDF)
-    double sum_run = 0.0;
+    // ============ DESCENDING-PROBABILITY CDF SAMPLING ============
+    // Sort tokens by probability descending, build CDF, select via u.
+    // This gives the consciousness lever coherent meaning:
+    //   u near 0 -> most probable token (conventional)
+    //   u near 1 -> least probable token (surprising/creative)
+
+    // Build index array of tokens with nonzero probability
+    std::vector<size_t> sorted_indices;
+    sorted_indices.reserve(cur_p->size);
     for (size_t i = 0; i < cur_p->size; ++i) {
-        sum_run += cur_p->data[i].p;
-        if (sum_run >= rnd) {
-            cur_p->selected = i;
+        if (cur_p->data[i].p > 0.0f) {
+            sorted_indices.push_back(i);
+        }
+    }
+
+    // Sort by probability descending
+    std::sort(sorted_indices.begin(), sorted_indices.end(),
+              [&](size_t a, size_t b) {
+                  return cur_p->data[a].p > cur_p->data[b].p;
+              });
+
+    // Walk CDF and select
+    double cdf_sum = 0.0;
+    for (size_t k = 0; k < sorted_indices.size(); ++k) {
+        cdf_sum += cur_p->data[sorted_indices[k]].p;
+        if (cdf_sum >= u) {
+            cur_p->selected = sorted_indices[k];
             return;
         }
     }
 
-    // Fallback to last token
-    cur_p->selected = cur_p->size - 1;
+    // Fallback to least probable token (end of sorted order)
+    if (!sorted_indices.empty()) {
+        cur_p->selected = sorted_indices.back();
+    } else {
+        cur_p->selected = cur_p->size - 1;
+    }
 }
 
 static void llama_sampler_dist_reset(struct llama_sampler * smpl) {
@@ -1389,8 +1411,7 @@ struct llama_sampler * llama_sampler_init_dist(uint32_t seed) {
             /* .total_samples           = */ 0,
             /* .greedy_samples          = */ 0,
             /* .quantum_samples         = */ 0,
-            /* .last_mode               = */ 128,
-            /* .last_mode_count         = */ 80,
+            /* .last_z_score            = */ 0.0,
             /* .last_was_quantum        = */ false,
             /* .inp_uniform             = */ nullptr,
             /* .inp_ctx                 = */ nullptr,
@@ -1475,18 +1496,14 @@ bool llama_sampler_dist_should_print_stats(const struct llama_sampler * smpl) {
 
 // Get last sample info for token coloring
 // Returns true if last sample was quantum, false if greedy
-// mode_out receives the mode value (0-255)
-// count_out receives how many times the mode appeared (expected ~80)
-bool llama_sampler_dist_get_last_info(const struct llama_sampler * smpl, uint8_t * mode_out, size_t * count_out) {
+// z_score_out receives the z-score from the last QRNG sample
+bool llama_sampler_dist_get_last_info(const struct llama_sampler * smpl, double * z_score_out) {
     if (!smpl || strcmp(llama_sampler_name(smpl), "dist") != 0) {
         return false;
     }
     const auto * ctx = (const llama_sampler_dist *) smpl->ctx;
-    if (mode_out) {
-        *mode_out = ctx->last_mode;
-    }
-    if (count_out) {
-        *count_out = ctx->last_mode_count;
+    if (z_score_out) {
+        *z_score_out = ctx->last_z_score;
     }
     return ctx->last_was_quantum;
 }

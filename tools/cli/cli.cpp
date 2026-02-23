@@ -115,18 +115,20 @@ struct cli_context {
                         }
                         curr_content += diff.content_delta;
 
-                        // Quantum token color coding based on QRNG mode count rarity
+                        // Quantum token color coding based on z-score magnitude
                         const char * color_code;
                         if (!res_partial->quantum_was_quantum) {
                             color_code = "\033[90m";           // grey: greedy/deterministic
-                        } else if (res_partial->quantum_mode_count < 106) {
-                            color_code = "\033[37m";           // white: statistically common
-                        } else if (res_partial->quantum_mode_count <= 108) {
-                            color_code = "\033[38;5;218m";     // pink: above average
-                        } else if (res_partial->quantum_mode_count <= 111) {
-                            color_code = "\033[31m";           // red: rare
+                        } else if (res_partial->quantum_z_score < -2.0) {
+                            color_code = "\033[34m";           // blue: strong negative shift
+                        } else if (res_partial->quantum_z_score < -1.0) {
+                            color_code = "\033[94m";           // light blue: mild negative shift
+                        } else if (res_partial->quantum_z_score <= 1.0) {
+                            color_code = "\033[37m";           // white: near expected mean
+                        } else if (res_partial->quantum_z_score <= 2.0) {
+                            color_code = "\033[38;5;218m";     // pink: mild positive shift
                         } else {
-                            color_code = "\033[1;38;5;135m";   // purple: mythic rare
+                            color_code = "\033[31m";           // red: strong positive shift
                         }
                         console::log("%s%s\033[0m", color_code, diff.content_delta.c_str());
                         console::flush();

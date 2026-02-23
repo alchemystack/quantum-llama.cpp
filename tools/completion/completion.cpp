@@ -751,26 +751,28 @@ int main(int argc, char ** argv) {
                 // Color generated tokens based on quantum sampling mode count
                 if (embd.size() == 1) {
                     // This is a generated token - apply quantum color coding
-                    uint8_t mode = 0;
-                    size_t count = 80;
-                    bool was_quantum = common_sampler_get_last_quantum_mode(smpl, &mode, &count);
+                    double z_score = 0.0;
+                    bool was_quantum = common_sampler_get_last_quantum_info(smpl, &z_score);
 
                     const char * color_code;
                     if (!was_quantum) {
                         // Greedy/deterministic: grey
                         color_code = "\033[90m";
-                    } else if (count < 106) {
-                        // Statistically common: white (expected ~80)
+                    } else if (z_score < -2.0) {
+                        // Strong negative shift: blue
+                        color_code = "\033[34m";
+                    } else if (z_score < -1.0) {
+                        // Mild negative shift: light blue
+                        color_code = "\033[94m";
+                    } else if (z_score <= 1.0) {
+                        // Near expected mean: white
                         color_code = "\033[37m";
-                    } else if (count <= 108) {
-                        // Above average frequency: light pink
+                    } else if (z_score <= 2.0) {
+                        // Mild positive shift: pink
                         color_code = "\033[38;5;218m";
-                    } else if (count <= 111) {
-                        // Rare: red
-                        color_code = "\033[31m";
                     } else {
-                        // Mythic rare (112+): purple with bold for emphasis
-                        color_code = "\033[1;38;5;135m";
+                        // Strong positive shift: red
+                        color_code = "\033[31m";
                     }
 
                     LOG("%s%s\033[0m", color_code, token_str.c_str());

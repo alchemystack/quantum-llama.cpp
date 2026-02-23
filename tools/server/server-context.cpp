@@ -1440,12 +1440,10 @@ private:
 
         // populate quantum sampling info for token coloring
         if (!is_progress && slot.smpl) {
-            uint8_t mode = 0;
-            size_t  count = 80;
-            bool was_quantum = common_sampler_get_last_quantum_mode(slot.smpl.get(), &mode, &count);
+            double z_score = 0.0;
+            bool was_quantum = common_sampler_get_last_quantum_info(slot.smpl.get(), &z_score);
             res->quantum_was_quantum = was_quantum;
-            res->quantum_mode        = mode;
-            res->quantum_mode_count  = count;
+            res->quantum_z_score     = z_score;
         }
 
         // populate timings if this is final response or timings_per_token is enabled

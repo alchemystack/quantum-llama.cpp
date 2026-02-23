@@ -63,8 +63,8 @@ Key style rules:
 
 ### Quantum Integration (in `src/`)
 - `psirngclient-manager.cpp/h` - Singleton managing QRNG connections
-- `anu-qrng-client.cpp/h` - HTTP client for ANU QRNG API (hex16 mode-based sampling)
-- `llama-sampling.cpp` - Sampling pipeline (integration point for quantum RNG)
+- `anu-qrng-client.cpp/h` - HTTP client for ANU/Qbert QRNG API (hex16 z-score-based sampling)
+- `llama-sampling.cpp` - Sampling pipeline (integration point for quantum RNG, descending-probability CDF)
 
 ### Quantum RNG Flow
 ```
@@ -80,14 +80,28 @@ Apply EDT Temperature: T = T₀ × 0.8^(θ/entropy)
     ↓
 QRNG API call (hex16, length=1024, size=10)
     ↓
-Find mode of ~20K uint8 values
+Compute mean of ~20K uint8 values
     ↓
-Use mode/256 for inverse CDF sampling
+Z-score: z = (mean - 127.5) / 0.51433
+    ↓
+Uniform float: u = Φ(z) = 0.5 × (1 + erf(z/√2))
+    ↓
+Descending-probability CDF sampling (highest prob first)
     ↓
 Done
 ```
 
 **Key principle:** Each token selection makes a fresh API call. No buffering - this preserves temporal correlation between consciousness and token selection.
+
+### Z-Score Color Coding
+| Z-Score Range | Color | Meaning |
+|---|---|---|
+| N/A (greedy) | Grey | Deterministic (no QRNG) |
+| \|z\| < 1.0 | White | Near expected mean |
+| z ∈ [-2, -1) | Light Blue | Mild negative shift |
+| z < -2 | Blue | Strong negative shift |
+| z ∈ (1, 2] | Pink | Mild positive shift |
+| z > 2 | Red | Strong positive shift |
 
 ### Adaptive Entropy-Based Sampling
 - **entropy < 0.50** → Greedy sampling (no API call, saves bandwidth)
@@ -153,7 +167,7 @@ $env:QBERT_API_KEY="your-api-key-here"
 | `--qrng-api {anu,qbert}` | Select QRNG API provider | anu |
 | `--quantum-verbose` | Show entropy/temperature for each token | off |
 | `--quantum-statistics` | Print sampling statistics at end | off |
-| `--quantum-entropy-threshold N` | Entropy cutoff for greedy vs QRNG | 0.40 |
+| `--quantum-entropy-threshold N` | Entropy cutoff for greedy vs QRNG | 0.50 |
 | `--quantum-edt-t0 N` | EDT upper bound temperature | 2.0 |
 | `--quantum-edt-theta N` | EDT entropy sensitivity | 1.0 |
 | `--no-quantum-adaptive-sampling` | Always use QRNG (no greedy) | - |
