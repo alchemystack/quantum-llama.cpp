@@ -94,14 +94,16 @@ Done
 **Key principle:** Each token selection makes a fresh API call. No buffering - this preserves temporal correlation between consciousness and token selection.
 
 ### Z-Score Color Coding
+Bluer colors = shift toward high-probability tokens, redder colors = shift toward low-probability tokens.
+
 | Z-Score Range | Color | Meaning |
 |---|---|---|
 | N/A (greedy) | Grey | Deterministic (no QRNG) |
 | \|z\| < 1.0 | White | Near expected mean |
-| z ∈ [-2, -1) | Light Blue | Mild negative shift |
-| z < -2 | Blue | Strong negative shift |
-| z ∈ (1, 2] | Pink | Mild positive shift |
-| z > 2 | Red | Strong positive shift |
+| z ∈ [-2, -1) | Light Blue | Mild high-prob shift |
+| z < -2 | Blue (vivid) | Strong high-prob shift |
+| z ∈ (1, 2] | Pink | Mild low-prob shift |
+| z > 2 | Red | Strong low-prob shift |
 
 ### Adaptive Entropy-Based Sampling
 - **entropy < 0.50** → Greedy sampling (no API call, saves bandwidth)

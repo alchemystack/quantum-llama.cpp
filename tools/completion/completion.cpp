@@ -759,19 +759,19 @@ int main(int argc, char ** argv) {
                         // Greedy/deterministic: grey
                         color_code = "\033[90m";
                     } else if (z_score < -2.0) {
-                        // Strong negative shift: blue
-                        color_code = "\033[34m";
+                        // Strong high-prob shift: vivid blue
+                        color_code = "\033[38;5;33m";
                     } else if (z_score < -1.0) {
-                        // Mild negative shift: light blue
-                        color_code = "\033[94m";
+                        // Mild high-prob shift: light blue
+                        color_code = "\033[38;5;117m";
                     } else if (z_score <= 1.0) {
                         // Near expected mean: white
                         color_code = "\033[37m";
                     } else if (z_score <= 2.0) {
-                        // Mild positive shift: pink
+                        // Mild low-prob shift: pink
                         color_code = "\033[38;5;218m";
                     } else {
-                        // Strong positive shift: red
+                        // Strong low-prob shift: red
                         color_code = "\033[31m";
                     }
 

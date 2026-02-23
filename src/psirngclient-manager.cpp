@@ -132,13 +132,13 @@ psirngclient_manager::psirngclient_manager() : initialized(false) {
             initialized = true;
             QRNG_LOG("QRNG initialized successfully!");
             fprintf(stderr, "[quantum-llama] Connected to %s - using true quantum randomness\n", provider_label);
-            fprintf(stderr, "[quantum-llama] Token color legend (based on z-score magnitude):\n");
+            fprintf(stderr, "[quantum-llama] Token color legend (bluer = toward high-prob tokens, redder = toward low-prob tokens):\n");
             fprintf(stderr, "[quantum-llama]   \033[90m■ grey\033[0m - deterministic (no QRNG)\n");
             fprintf(stderr, "[quantum-llama]   \033[37m■ white\033[0m - near expected mean (|z| < 1)\n");
-            fprintf(stderr, "[quantum-llama]   \033[94m■ light blue\033[0m - mild negative shift (z in [-2, -1))\n");
-            fprintf(stderr, "[quantum-llama]   \033[34m■ blue\033[0m - strong negative shift (z < -2)\n");
-            fprintf(stderr, "[quantum-llama]   \033[38;5;218m■ pink\033[0m - mild positive shift (z in (1, 2])\n");
-            fprintf(stderr, "[quantum-llama]   \033[31m■ red\033[0m - strong positive shift (z > 2)\n");
+            fprintf(stderr, "[quantum-llama]   \033[38;5;117m■ light blue\033[0m - mild high-prob shift (z in [-2, -1))\n");
+            fprintf(stderr, "[quantum-llama]   \033[38;5;33m■ blue\033[0m - strong high-prob shift (z < -2)\n");
+            fprintf(stderr, "[quantum-llama]   \033[38;5;218m■ pink\033[0m - mild low-prob shift (z in (1, 2])\n");
+            fprintf(stderr, "[quantum-llama]   \033[31m■ red\033[0m - strong low-prob shift (z > 2)\n");
             fflush(stderr);
         } else {
             QRNG_LOG("QRNG initialization FAILED with code %d", result);

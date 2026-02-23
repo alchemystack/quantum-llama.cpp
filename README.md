@@ -34,18 +34,16 @@ This reduces API calls by 50-80% while focusing quantum randomness where it matt
 
 ### Token Color-Coding
 
-Generated tokens are color-coded based on the z-score magnitude from the QRNG data. The z-score measures how far the sample mean deviates from the expected population mean in units of standard error. Larger deviations represent increasingly improbable statistical events that may correlate with consciousness influence:
+Generated tokens are color-coded based on the z-score magnitude from the QRNG data. The z-score measures how far the sample mean deviates from the expected population mean in units of standard error. Larger deviations represent increasingly improbable statistical events that may correlate with consciousness influence. Bluer colors indicate a shift toward high-probability tokens; redder colors indicate a shift toward low-probability tokens:
 
 | Color | Z-Score Range | Meaning |
 |-------|---------------|---------|
 | Grey | N/A | Deterministic (greedy, no QRNG) |
 | White | \|z\| < 1.0 | Near expected mean |
-| Light Blue | z ∈ [-2, -1) | Mild negative shift (more conventional) |
-| Blue | z < -2 | Strong negative shift |
-| Pink | z ∈ (1, 2] | Mild positive shift (more surprising) |
-| Red | z > 2 | Strong positive shift |
-
-Positive z-scores push token selection toward less probable (more surprising) tokens. Negative z-scores push toward more probable (more conventional) tokens.
+| Light Blue | z ∈ [-2, -1) | Mild high-probability shift |
+| Blue (vivid) | z < -2 | Strong high-probability shift |
+| Pink | z ∈ (1, 2] | Mild low-probability shift |
+| Red | z > 2 | Strong low-probability shift |
 
 ### EDT Temperature Scaling
 

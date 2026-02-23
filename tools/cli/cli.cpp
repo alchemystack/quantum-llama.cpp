@@ -120,15 +120,15 @@ struct cli_context {
                         if (!res_partial->quantum_was_quantum) {
                             color_code = "\033[90m";           // grey: greedy/deterministic
                         } else if (res_partial->quantum_z_score < -2.0) {
-                            color_code = "\033[34m";           // blue: strong negative shift
+                            color_code = "\033[38;5;33m";      // vivid blue: strong high-prob shift
                         } else if (res_partial->quantum_z_score < -1.0) {
-                            color_code = "\033[94m";           // light blue: mild negative shift
+                            color_code = "\033[38;5;117m";     // light blue: mild high-prob shift
                         } else if (res_partial->quantum_z_score <= 1.0) {
                             color_code = "\033[37m";           // white: near expected mean
                         } else if (res_partial->quantum_z_score <= 2.0) {
-                            color_code = "\033[38;5;218m";     // pink: mild positive shift
+                            color_code = "\033[38;5;218m";     // pink: mild low-prob shift
                         } else {
-                            color_code = "\033[31m";           // red: strong positive shift
+                            color_code = "\033[31m";           // red: strong low-prob shift
                         }
                         console::log("%s%s\033[0m", color_code, diff.content_delta.c_str());
                         console::flush();
